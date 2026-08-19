@@ -93,13 +93,13 @@ export const appRouter = router({
       return { id };
     }),
     list: protectedProcedure.query(({ ctx }) => db.listEncryptedMediaBackups(ctx.user.id)),
-    restore: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+    restore: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const record = await db.getEncryptedMediaBackup(ctx.user.id, input.id);
       if (!record) throw new Error("لم نعثر على هذا الملف في نسختك الاحتياطية.");
       const response = await fetch(await storageGetSignedUrl(record.storageKey));
       if (!response.ok) throw new Error("تعذر جلب الملف المشفر من التخزين.");
       const decrypted = decryptAudioBackup(Buffer.from(await response.arrayBuffer()), record.ivLength, record.tagLength);
-      return { fileName: record.fileName, contentType: record.contentType, dataBase64: decrypted.toString("base64"), lectureId: record.lectureId };
+      return { fileName: record.fileName, contentType: record.contentType, dataBase64: decrypted.toString("base64"), lectureId: record.lectureId, sourceId: record.sourceId, originalSize: record.originalSize };
     }),
   }),
 

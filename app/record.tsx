@@ -11,12 +11,11 @@ import { useStudy } from "@/lib/study-context";
 import type { LectureAudioPart, SubjectSection } from "@/lib/study-types";
 import { ScreenContainer } from "@/components/screen-container";
 
-const AUTO_PART_DURATION_SECONDS = 20 * 60;
-
 export default function RecordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ subjectId?: string; section?: SubjectSection }>();
-  const { subjects, terms, years, getSubject, getTerm, getYear, addLecture } = useStudy();
+  const { subjects, terms, years, getSubject, getTerm, getYear, addLecture, syncSettings } = useStudy();
+  const autoPartDurationSeconds = Math.max(5, Math.min(60, syncSettings.recordingPartMinutes ?? 20)) * 60;
   const [selectedSubjectId, setSelectedSubjectId] = useState(params.subjectId ?? "");
   const [selectedSection, setSelectedSection] = useState<SubjectSection>(params.section === "practical" ? "practical" : "theory");
   const [selectingDestination, setSelectingDestination] = useState(!params.subjectId);
@@ -46,10 +45,10 @@ export default function RecordScreen() {
   }, [recorderState.isRecording]);
 
   useEffect(() => {
-    if (!recorderState.isRecording || elapsedSeconds < AUTO_PART_DURATION_SECONDS || isSwitchingPart.current) return;
+    if (!recorderState.isRecording || elapsedSeconds < autoPartDurationSeconds || isSwitchingPart.current) return;
     isSwitchingPart.current = true;
     void nextPart().finally(() => { isSwitchingPart.current = false; });
-  }, [elapsedSeconds, recorderState.isRecording]);
+  }, [autoPartDurationSeconds, elapsedSeconds, recorderState.isRecording]);
 
   useEffect(() => {
     if (!selectedSubject?.hasPracticalSection && selectedSection === "practical") setSelectedSection("theory");
