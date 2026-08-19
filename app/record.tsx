@@ -20,6 +20,7 @@ export default function RecordScreen() {
   const [selectingDestination, setSelectingDestination] = useState(!params.subjectId);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [audioSizeBytes, setAudioSizeBytes] = useState(0);
   const [title, setTitle] = useState("");
   const startedAt = useRef<number | null>(null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -65,6 +66,7 @@ export default function RecordScreen() {
       if (!uri) throw new Error("لا يوجد ملف مسجل.");
       const persistedUri = await persistRecording(uri);
       setAudioUri(persistedUri);
+      setAudioSizeBytes(new File(persistedUri).size ?? 0);
       setElapsedSeconds(startedAt.current ? Math.max(1, Math.floor((Date.now() - startedAt.current) / 1000)) : 1);
       startedAt.current = null;
       setTitle(`محاضرة ${new Date().toLocaleDateString("ar", { month: "long", day: "numeric" })}`);
@@ -79,6 +81,7 @@ export default function RecordScreen() {
       title: title.trim() || "محاضرة جديدة",
       durationSeconds: elapsedSeconds,
       audioUri,
+      audioSizeBytes,
     });
     router.replace({ pathname: "/lecture/[lectureId]", params: { lectureId } });
   };

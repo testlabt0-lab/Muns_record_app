@@ -64,7 +64,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    permissions: ["POST_NOTIFICATIONS", "READ_CALENDAR", "WRITE_CALENDAR"],
     intentFilters: [
       {
         action: "VIEW",
@@ -97,6 +97,25 @@ const config: ExpoConfig = {
       {
         supportsBackgroundPlayback: true,
         supportsPictureInPicture: true,
+      },
+    ],
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "Allow $(PRODUCT_NAME) to access your lecture attachments.",
+        cameraPermission: "Allow $(PRODUCT_NAME) to take board photos for lectures.",
+      },
+    ],
+    [
+      "expo-calendar",
+      {
+        calendarPermission: "Allow $(PRODUCT_NAME) to add study deadlines to your calendar.",
+      },
+    ],
+    [
+      "expo-notifications",
+      {
+        defaultChannel: "study-reminders",
       },
     ],
     [

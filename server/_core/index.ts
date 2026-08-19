@@ -83,7 +83,16 @@ async function startServer() {
         res.status(502).json({ error: "لم تُرجع خدمة التحويل نصاً صالحاً." });
         return;
       }
-      res.json({ text: result.text, language: result.language });
+      res.json({
+        text: result.text,
+        language: result.language,
+        segments: result.segments.map((segment) => ({
+          id: String(segment.id),
+          text: segment.text.trim(),
+          startSeconds: segment.start,
+          endSeconds: segment.end,
+        })).filter((segment) => segment.text.length > 0),
+      });
     } catch (error) {
       console.error("[lectures.transcribe] failed", error);
       res.status(500).json({ error: "تعذر تحويل التسجيل إلى نص في الوقت الحالي." });

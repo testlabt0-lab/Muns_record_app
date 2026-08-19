@@ -21,6 +21,7 @@ export default function RootLayout() {
             <Stack.Screen name="subject/[subjectId]" />
             <Stack.Screen name="record" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
             <Stack.Screen name="lecture/[lectureId]" />
+            <Stack.Screen name="storage" />
           </Stack>
         </StudyProvider>
       </QueryClientProvider>

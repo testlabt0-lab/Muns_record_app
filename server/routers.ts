@@ -2,7 +2,8 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM, listLLMModels } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import * as db from "./db";
 import { z } from "zod";
 
 const rawLectureSummarySchema = z.object({
@@ -63,6 +64,18 @@ export const appRouter = router({
           throw new Error("تعذر التحقق من بنية الملخص الناتج.");
         }
       }),
+  }),
+  studySync: router({
+    save: protectedProcedure
+      .input(z.object({ payload: z.string().min(2).max(8_000_000) }))
+      .mutation(async ({ ctx, input }) => {
+        await db.saveStudyBackup(ctx.user.id, input.payload);
+        return { savedAt: new Date().toISOString() };
+      }),
+    load: protectedProcedure.query(async ({ ctx }) => {
+      const backup = await db.getStudyBackup(ctx.user.id);
+      return backup ? { payload: backup.payload, updatedAt: backup.updatedAt.toISOString() } : null;
+    }),
   }),
 
   // TODO: add feature routers here, e.g.

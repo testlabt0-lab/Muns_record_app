@@ -8,6 +8,8 @@ import { appTheme } from "@/lib/app-theme";
 const iconMap = {
   index: "space-dashboard",
   study: "account-tree",
+  review: "style",
+  planner: "event-note",
   library: "auto-stories",
   settings: "tune",
 } as const;
@@ -26,6 +28,8 @@ export default function TabsLayout() {
     })}>
       <Tabs.Screen name="index" options={{ title: "الرئيسية" }} />
       <Tabs.Screen name="study" options={{ title: "دراستي" }} />
+      <Tabs.Screen name="review" options={{ title: "المراجعة" }} />
+      <Tabs.Screen name="planner" options={{ title: "خطتي" }} />
       <Tabs.Screen name="library" options={{ title: "المكتبة" }} />
       <Tabs.Screen name="settings" options={{ title: "الإعدادات" }} />
     </Tabs>
