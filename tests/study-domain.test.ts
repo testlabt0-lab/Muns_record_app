@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { deriveApiBaseUrlFromHost } from "../lib/api-url";
 import { allowedSections, createActiveAcademicYear, deactivateAcademicYears, findOrCreateTerm, lectureSectionIsValid, normalizeRequiredTitle } from "../lib/study-domain";
 
 describe("قواعد تنظيم المحتوى الدراسي", () => {
@@ -27,5 +28,10 @@ describe("قواعد تنظيم المحتوى الدراسي", () => {
 
   it("يرفض العناوين الفارغة بعد التنسيق", () => {
     expect(() => normalizeRequiredTitle("   ", "اسم المادة")).toThrow("اكتب اسم المادة أولاً.");
+  });
+
+  it("يشتق عنوان خدمة التحويل من رابط Expo Go على الهاتف", () => {
+    expect(deriveApiBaseUrlFromHost("8081-sandbox.region.manus.computer")).toBe("https://3000-sandbox.region.manus.computer");
+    expect(deriveApiBaseUrlFromHost("https://8081-sandbox.region.manus.computer/path")).toBe("https://3000-sandbox.region.manus.computer");
   });
 });

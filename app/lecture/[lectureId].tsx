@@ -40,8 +40,10 @@ export default function LectureDetailScreen() {
       const file = new File(lecture.audioUri);
       if (!file.exists) throw new Error("لم يعد ملف التسجيل متاحاً على الجهاز.");
       if (file.size > 16 * 1024 * 1024) { Alert.alert("التسجيل كبير جداً", "قسّم التسجيل إلى أجزاء أصغر من 16 ميغابايت ثم أعد المحاولة."); return; }
+      const apiBaseUrl = getApiBaseUrl();
+      if (!apiBaseUrl) throw new Error("تعذر الوصول إلى خدمة التحويل. افتح التطبيق من الهاتف عبر رمز QR أو تحقق من اتصال الشبكة.");
       setIsTranscribing(true); updateLecture(lecture.id, { transcriptionStatus: "processing" });
-      const response = await fetch(`${getApiBaseUrl()}/api/lectures/transcribe`, { method: "POST", headers: { "Content-Type": file.type || "audio/m4a" }, body: file });
+      const response = await fetch(`${apiBaseUrl}/api/lectures/transcribe`, { method: "POST", headers: { "Content-Type": file.type || "audio/m4a" }, body: file });
       const payload = await response.json() as { text?: string; error?: string };
       if (!response.ok || !payload.text) throw new Error(payload.error || "تعذر استخراج النص.");
       updateLecture(lecture.id, { transcript: payload.text, transcriptionStatus: "completed", summaryStatus: "ready" });

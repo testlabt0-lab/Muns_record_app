@@ -72,7 +72,8 @@ async function startServer() {
       }
       const contentType = req.headers["content-type"] || "audio/m4a";
       const { url } = await storagePut(`lecture-audio/${Date.now()}.m4a`, req.body, contentType);
-      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const forwardedProtocol = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+      const baseUrl = `${forwardedProtocol || req.protocol}://${req.get("host")}`;
       const result = await transcribeAudio({
         audioUrl: `${baseUrl}${url}`,
         language: "ar",

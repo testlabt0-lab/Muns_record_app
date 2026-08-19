@@ -5,12 +5,26 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 
-const lectureSummarySchema = z.object({
+const rawLectureSummarySchema = z.object({
   overview: z.string().min(1),
   keyPoints: z.array(z.string()).min(2).max(8),
-  terms: z.array(z.string()).max(12),
+  terms: z.array(z.union([
+    z.string(),
+    z.object({ term: z.string().min(1), definition: z.string().min(1).optional() }),
+  ])).max(12),
   reviewQuestions: z.array(z.string()).min(2).max(6),
 });
+
+function normalizeLectureSummary(value: unknown) {
+  const summary = rawLectureSummarySchema.parse(value);
+  return {
+    ...summary,
+    terms: summary.terms.map((term) => {
+      if (typeof term === "string") return term;
+      return term.definition ? `${term.term}: ${term.definition}` : term.term;
+    }),
+  };
+}
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -40,12 +54,11 @@ export const appRouter = router({
             },
             { role: "user", content: `لغة المحاضرة: ${input.language}\n\nنص المحاضرة:\n${input.transcript}` },
           ],
-          response_format: { type: "json_object" },
         });
         const content = response.choices[0]?.message?.content;
         if (!content || typeof content !== "string") throw new Error("لم تُرجع خدمة التلخيص محتوى صالحاً.");
         try {
-          return lectureSummarySchema.parse(JSON.parse(content));
+          return normalizeLectureSummary(JSON.parse(content));
         } catch {
           throw new Error("تعذر التحقق من بنية الملخص الناتج.");
         }

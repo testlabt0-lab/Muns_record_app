@@ -1,5 +1,7 @@
 import * as Linking from "expo-linking";
 import * as ReactNative from "react-native";
+import Constants from "expo-constants";
+import { deriveApiBaseUrlFromHost } from "@/lib/api-url";
 
 // Extract scheme from bundle ID (last segment timestamp, prefixed with "manus")
 // e.g., "space.manus.my.app.t20240115103045" -> "manus20240115103045"
@@ -45,9 +47,16 @@ export function getApiBaseUrl(): string {
     }
   }
 
+  // Expo Go exposes the Metro host in the project manifest. Reuse it to derive
+  // the managed API host for iOS and Android instead of issuing a relative URL.
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) return deriveApiBaseUrlFromHost(hostUri);
+
   // Fallback to empty (will use relative URL)
   return "";
 }
+
+export { deriveApiBaseUrlFromHost };
 
 export const SESSION_TOKEN_KEY = "app_session_token";
 export const USER_INFO_KEY = "manus-runtime-user-info";
