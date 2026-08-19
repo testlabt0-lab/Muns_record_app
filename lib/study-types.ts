@@ -112,6 +112,7 @@ export interface StudyTask {
 export interface SyncSettings {
   cloudBackupEnabled: boolean;
   recordingPartMinutes?: number;
+  preferredPlaybackRate?: number;
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
 }

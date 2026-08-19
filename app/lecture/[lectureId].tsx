@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { File } from "expo-file-system";
@@ -18,10 +18,12 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/hooks/use-auth";
 import { ScreenContainer } from "@/components/screen-container";
 
+type BackupUploadItem = { sourceId: string; uri: string; name: string; contentType: string; sizeBytes?: number };
+
 export default function LectureDetailScreen() {
   const router = useRouter();
   const { lectureId } = useLocalSearchParams<{ lectureId: string }>();
-  const { hydrated, lectures, getSubject, updateLecture, addReviewCards, reviewCards, addAttachment, removeAttachment } = useStudy();
+  const { hydrated, lectures, getSubject, updateLecture, addReviewCards, reviewCards, addAttachment, removeAttachment, syncSettings, updateSyncSettings } = useStudy();
   const lecture = lectures.find((item) => item.id === lectureId);
   const subject = lecture ? getSubject(lecture.subjectId) : undefined;
   const audioParts = lecture?.audioParts?.length ? lecture.audioParts : lecture?.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds }] : [];
@@ -33,10 +35,15 @@ export default function LectureDetailScreen() {
   const summarize = trpc.lectures.summarize.useMutation();
   const encryptedUpload = trpc.encryptedMedia.upload.useMutation();
   const { isAuthenticated } = useAuth();
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [playbackRate, setPlaybackRate] = useState(syncSettings.preferredPlaybackRate ?? 1);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
+  const [uploadQueue, setUploadQueue] = useState<BackupUploadItem[]>([]);
+  const [uploadIndex, setUploadIndex] = useState(0);
+  const [uploadPaused, setUploadPaused] = useState(false);
+  const pauseRequested = useRef(false);
 
   useEffect(() => { void setAudioModeAsync({ playsInSilentMode: true }); }, []);
+  useEffect(() => { player.setPlaybackRate(syncSettings.preferredPlaybackRate ?? 1); setPlaybackRate(syncSettings.preferredPlaybackRate ?? 1); }, [player, syncSettings.preferredPlaybackRate]);
   useEffect(() => () => player.release(), [player]);
   useEffect(() => {
     const source = audioParts[activePartIndex]?.uri;
@@ -71,6 +78,7 @@ export default function LectureDetailScreen() {
   const selectPlaybackRate = (rate: number) => {
     player.setPlaybackRate(rate);
     setPlaybackRate(rate);
+    updateSyncSettings({ preferredPlaybackRate: rate });
   };
 
   const playTranscriptSegment = (startSeconds: number) => {
@@ -178,20 +186,31 @@ export default function LectureDetailScreen() {
     Alert.alert("نسخة مشفرة اختيارية", `سيُشفّر التطبيق ${files.length} ملفاً ثم يحفظها في نسختك الاحتياطية.`, [{ text: "إلغاء", style: "cancel" }, { text: "متابعة", onPress: () => void uploadFiles(files) }]);
   };
 
-  const uploadFiles = async (files: Array<{ sourceId: string; uri: string; name: string; contentType: string; sizeBytes?: number }>) => {
+  const uploadFiles = async (files: BackupUploadItem[], startAt = 0) => {
     try {
-      for (let index = 0; index < files.length; index += 1) {
+      setUploadQueue(files);
+      setUploadIndex(startAt);
+      setUploadPaused(false);
+      pauseRequested.current = false;
+      for (let index = startAt; index < files.length; index += 1) {
+        if (pauseRequested.current) { setUploadPaused(true); return; }
         const item = files[index];
         setUploadProgress({ current: index + 1, total: files.length, fileName: item.name });
         const file = new File(item.uri);
         if (!file.exists) throw new Error(`لم يعد الملف «${item.name}» متاحاً على الجهاز.`);
         if (file.size > 16 * 1024 * 1024) throw new Error(`الملف «${item.name}» أكبر من الحد الحالي للنسخ المشفر.`);
         await encryptedUpload.mutateAsync({ lectureId: lecture.id, sourceId: item.sourceId, fileName: item.name, contentType: item.contentType, dataBase64: await file.base64() });
+        setUploadIndex(index + 1);
       }
+      setUploadQueue([]);
+      setUploadIndex(0);
       Alert.alert("تم إنشاء النسخة المشفرة", "حُفظت الملفات المحددة بطريقة مشفرة في نسختك الاختيارية.");
     } catch (error) { Alert.alert("تعذر النسخ المشفر", error instanceof Error ? error.message : "حاول مرة أخرى."); }
-    finally { setUploadProgress(null); }
+    finally { if (!pauseRequested.current) setUploadProgress(null); }
   };
+
+  const pauseUpload = () => { if (uploadQueue.length) pauseRequested.current = true; };
+  const resumeUpload = () => { if (uploadQueue.length) void uploadFiles(uploadQueue, uploadIndex); };
 
   const statusText = lecture.transcriptionStatus === "completed" ? "تم التحويل إلى نص" : lecture.transcriptionStatus === "processing" ? "يجري التحويل" : lecture.transcriptionStatus === "failed" ? "فشل التحويل" : "محفوظ محلياً";
   const statusTone = lecture.transcriptionStatus === "completed" ? "success" : lecture.transcriptionStatus === "processing" ? "warning" : "neutral";
@@ -212,7 +231,8 @@ export default function LectureDetailScreen() {
     <Pressable disabled={!lecture.transcript && !lecture.summary} onPress={exportPdf} style={({ pressed }) => [styles.exportButton, (!lecture.transcript && !lecture.summary) && styles.disabled, pressed && styles.pressed]}><MaterialIcons name="picture-as-pdf" size={20} color={appTheme.primary} /><Text style={styles.exportText}>تصدير النص والملخص PDF</Text></Pressable>
 
     <View style={styles.attachmentsCard}><View style={styles.attachmentsHeader}><Text style={styles.sectionTitle}>مرفقات المحاضرة</Text><StatusPill label={`${(lecture.attachments ?? []).length} مرفق`} tone="neutral" /></View><View style={styles.attachmentActions}><Pressable onPress={() => void addImage("camera")} style={styles.attachmentAction}><MaterialIcons name="photo-camera" size={18} color={appTheme.primary} /><Text style={styles.attachmentActionText}>التقاط سبورة</Text></Pressable><Pressable onPress={() => void addImage("library")} style={styles.attachmentAction}><MaterialIcons name="image" size={18} color={appTheme.primary} /><Text style={styles.attachmentActionText}>إضافة صورة</Text></Pressable><Pressable onPress={() => void addDocument()} style={styles.attachmentAction}><MaterialIcons name="attach-file" size={18} color={appTheme.primary} /><Text style={styles.attachmentActionText}>PDF أو ملف</Text></Pressable></View>{(lecture.attachments ?? []).map((attachment) => <View key={attachment.id} style={styles.attachmentRow}><Pressable onPress={() => void Linking.openURL(attachment.uri)} style={styles.attachmentOpen}><MaterialIcons name={attachment.kind === "image" ? "image" : "description"} size={19} color={appTheme.primary} /><Text style={styles.attachmentTitle} numberOfLines={1}>{attachment.title}</Text></Pressable><Pressable accessibilityLabel="إزالة المرفق" onPress={() => deleteAttachment(attachment.id, attachment.title)} style={styles.attachmentDelete}><MaterialIcons name="close" size={17} color={appTheme.danger} /></Pressable></View>)}</View>
-    <Pressable disabled={encryptedUpload.isPending} onPress={() => void backupMediaEncrypted()} style={({ pressed }) => [styles.encryptedBackup, encryptedUpload.isPending && styles.disabled, pressed && styles.pressed]}><MaterialIcons name="lock" size={19} color={appTheme.success} /><Text style={styles.encryptedBackupText}>{uploadProgress ? `رفع ${uploadProgress.current}/${uploadProgress.total}: ${uploadProgress.fileName}` : encryptedUpload.isPending ? "يجري التشفير والحفظ" : "إنشاء نسخة مشفرة للملفات"}</Text></Pressable>
+    <Pressable disabled={encryptedUpload.isPending || uploadPaused} onPress={() => void backupMediaEncrypted()} style={({ pressed }) => [styles.encryptedBackup, (encryptedUpload.isPending || uploadPaused) && styles.disabled, pressed && styles.pressed]}><MaterialIcons name="lock" size={19} color={appTheme.success} /><Text style={styles.encryptedBackupText}>{uploadProgress ? `رفع ${uploadProgress.current}/${uploadProgress.total}: ${uploadProgress.fileName}` : encryptedUpload.isPending ? "يجري التشفير والحفظ" : "إنشاء نسخة مشفرة للملفات"}</Text></Pressable>
+    {uploadProgress ? <Pressable onPress={uploadPaused ? resumeUpload : pauseUpload} style={styles.uploadControl}><MaterialIcons name={uploadPaused ? "play-arrow" : "pause"} size={18} color={appTheme.primary} /><Text style={styles.uploadControlText}>{uploadPaused ? `استئناف من الملف ${uploadIndex + 1}` : "إيقاف بعد الملف الحالي"}</Text></Pressable> : null}
 
     <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>النص</Text><StatusPill label={statusText} tone={statusTone} /></View>
     {lecture.transcript ? <View style={styles.transcriptCard}>{lecture.transcriptSegments?.length ? lecture.transcriptSegments.map((segment) => <Pressable key={segment.id} onPress={() => playTranscriptSegment(segment.startSeconds)} style={({ pressed }) => [styles.segmentLine, pressed && styles.pressed]}><MaterialIcons name="play-circle-outline" size={18} color={appTheme.primary} /><Text style={styles.segmentText}>{segment.text}</Text><Text style={styles.segmentTime}>{formatDuration(Math.floor(segment.startSeconds))}</Text></Pressable>) : <Text style={styles.transcript}>{lecture.transcript}</Text>}</View> : <ActionCard icon="text-snippet" color={appTheme.primary} title={lecture.transcriptionStatus === "failed" ? "تعذر التحويل سابقاً" : "حوّل التسجيل إلى نص"} description={lecture.transcriptionStatus === "failed" ? lecture.retryReason ?? "تحقق من الشبكة ثم أعد المحاولة." : "يُرفع التسجيل عند اختيارك لهذه الخطوة فقط ثم يحفظ النص مع المحاضرة."}>{isTranscribing || lecture.transcriptionStatus === "processing" ? <ProgressNotice progress={lecture.transcriptionProgress ?? 15} label="يجري رفع التسجيل وتحويله" /> : <PrimaryButton label={lecture.transcriptionStatus === "failed" ? "إعادة المحاولة" : "تحويل إلى نص"} icon="text-snippet" onPress={transcribe} />}</ActionCard>}
@@ -232,6 +252,6 @@ const styles = StyleSheet.create({
   partTabs: { flexDirection: "row-reverse", gap: 6, marginBottom: 12, overflow: "hidden" }, partTab: { backgroundColor: "#334155", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 }, partTabActive: { backgroundColor: "#E0E7FF" }, partTabText: { color: "#CBD5E1", fontSize: 11, fontWeight: "800" }, partTabTextActive: { color: appTheme.primary }, speedRow: { alignItems: "center", flexDirection: "row-reverse", gap: 6, justifyContent: "center", marginBottom: 12 }, speedLabel: { color: "#CBD5E1", fontSize: 11, fontWeight: "800", marginLeft: 4 }, speedChip: { backgroundColor: "#334155", borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6 }, speedChipActive: { backgroundColor: "#E0E7FF" }, speedChipText: { color: "#CBD5E1", fontSize: 11, fontWeight: "800" }, speedChipTextActive: { color: appTheme.primary }, partLabel: { color: "#CBD5E1", fontSize: 11, marginBottom: 8, textAlign: "center" },
   attachmentsCard: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 19, borderWidth: 1, gap: 11, padding: 14 }, attachmentsHeader: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between" }, attachmentActions: { flexDirection: "row-reverse", gap: 7 }, attachmentAction: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderRadius: 11, flex: 1, gap: 4, justifyContent: "center", minHeight: 57, paddingHorizontal: 3 }, attachmentActionText: { color: appTheme.primary, fontSize: 10, fontWeight: "800", textAlign: "center" }, attachmentRow: { alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 12, flexDirection: "row-reverse", gap: 7, padding: 9 }, attachmentOpen: { alignItems: "center", flex: 1, flexDirection: "row-reverse", gap: 7 }, attachmentTitle: { color: appTheme.ink, flex: 1, fontSize: 12, fontWeight: "700", textAlign: "right" }, attachmentDelete: { alignItems: "center", backgroundColor: appTheme.dangerSoft, borderRadius: 9, height: 29, justifyContent: "center", width: 29 },
   exportButton: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderColor: "#C7D2FE", borderRadius: 15, borderWidth: 1, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 48 }, exportText: { color: appTheme.primary, fontSize: 14, fontWeight: "800" }, disabled: { opacity: 0.45 }, sectionHeader: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between", marginTop: 3 }, sectionTitle: { color: appTheme.ink, fontSize: 19, fontWeight: "800" }, transcriptCard: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 18, borderWidth: 1, padding: 16 }, transcript: { color: appTheme.ink, fontSize: 15, lineHeight: 27, textAlign: "right" }, segmentLine: { alignItems: "flex-start", borderBottomColor: appTheme.border, borderBottomWidth: 1, flexDirection: "row-reverse", gap: 8, paddingVertical: 10 }, segmentText: { color: appTheme.ink, flex: 1, fontSize: 14, lineHeight: 22, textAlign: "right" }, segmentTime: { color: appTheme.primary, fontSize: 11, fontVariant: ["tabular-nums"], marginTop: 3 }, actionCard: { alignItems: "center", backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 19, borderWidth: 1, gap: 12, padding: 17 }, actionCopy: { alignItems: "flex-end", width: "100%" }, actionTitle: { color: appTheme.ink, fontSize: 16, fontWeight: "800", textAlign: "right" }, actionBody: { color: appTheme.muted, fontSize: 12, lineHeight: 19, textAlign: "right" }, progressNotice: { alignSelf: "stretch", gap: 8 }, progressTrackLight: { backgroundColor: "#E2E8F0", borderRadius: 5, height: 7, overflow: "hidden" }, progressFillLight: { backgroundColor: appTheme.primary, borderRadius: 5, height: 7 }, progressNoticeText: { color: appTheme.primary, fontSize: 12, fontWeight: "700", textAlign: "center" }, reviewAction: { marginTop: -8 },
-  encryptedBackup: { alignItems: "center", backgroundColor: appTheme.successSoft, borderColor: "#99F6E4", borderRadius: 15, borderWidth: 1, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 48 }, encryptedBackupText: { color: appTheme.success, fontSize: 14, fontWeight: "800" },
+  encryptedBackup: { alignItems: "center", backgroundColor: appTheme.successSoft, borderColor: "#99F6E4", borderRadius: 15, borderWidth: 1, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 48 }, encryptedBackupText: { color: appTheme.success, fontSize: 14, fontWeight: "800", textAlign: "center" }, uploadControl: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderRadius: 13, flexDirection: "row-reverse", gap: 7, justifyContent: "center", minHeight: 42 }, uploadControlText: { color: appTheme.primary, fontSize: 12, fontWeight: "800" },
   summaryCard: { backgroundColor: "#F8FAFF", borderColor: "#C7D2FE", borderRadius: 19, borderWidth: 1, gap: 19, padding: 17 }, summaryOverview: { color: appTheme.ink, fontSize: 15, fontWeight: "600", lineHeight: 25, textAlign: "right" }, summaryGroup: { gap: 9 }, summaryHeading: { alignItems: "center", flexDirection: "row-reverse", gap: 7 }, summaryTitle: { color: appTheme.ink, fontSize: 14, fontWeight: "800" }, summaryItem: { alignItems: "flex-start", flexDirection: "row-reverse", gap: 8 }, bullet: { backgroundColor: appTheme.primary, borderRadius: 4, height: 6, marginTop: 8, width: 6 }, summaryItemText: { color: "#334155", flex: 1, fontSize: 13, lineHeight: 20, textAlign: "right" }, tags: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 7 }, tag: { backgroundColor: "#E0E7FF", borderRadius: 99, paddingHorizontal: 10, paddingVertical: 6 }, tagText: { color: appTheme.primary, fontSize: 12, fontWeight: "700" }, pressed: { opacity: 0.75, transform: [{ scale: 0.985 }] },
 });
