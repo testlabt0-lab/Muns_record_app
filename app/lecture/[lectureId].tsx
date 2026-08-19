@@ -24,7 +24,10 @@ export default function LectureDetailScreen() {
   const { hydrated, lectures, getSubject, updateLecture, addReviewCards, reviewCards, addAttachment, removeAttachment } = useStudy();
   const lecture = lectures.find((item) => item.id === lectureId);
   const subject = lecture ? getSubject(lecture.subjectId) : undefined;
-  const player = useAudioPlayer(lecture?.audioUri ?? null);
+  const audioParts = lecture?.audioParts?.length ? lecture.audioParts : lecture?.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds }] : [];
+  const [activePartIndex, setActivePartIndex] = useState(0);
+  const [pendingPlayback, setPendingPlayback] = useState<{ seekSeconds: number; play: boolean } | null>(null);
+  const player = useAudioPlayer(audioParts[activePartIndex]?.uri ?? lecture?.audioUri ?? null);
   const playerStatus = useAudioPlayerStatus(player);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const summarize = trpc.lectures.summarize.useMutation();
@@ -33,6 +36,20 @@ export default function LectureDetailScreen() {
 
   useEffect(() => { void setAudioModeAsync({ playsInSilentMode: true }); }, []);
   useEffect(() => () => player.release(), [player]);
+  useEffect(() => {
+    const source = audioParts[activePartIndex]?.uri;
+    if (!source) return;
+    player.replace(source);
+    if (pendingPlayback) {
+      void player.seekTo(Math.max(0, pendingPlayback.seekSeconds)).then(() => { if (pendingPlayback.play) player.play(); });
+      setPendingPlayback(null);
+    }
+  }, [activePartIndex, audioParts, pendingPlayback, player]);
+  useEffect(() => {
+    if (!playerStatus.didJustFinish || activePartIndex >= audioParts.length - 1) return;
+    setPendingPlayback({ seekSeconds: 0, play: true });
+    setActivePartIndex((current) => current + 1);
+  }, [activePartIndex, audioParts.length, playerStatus.didJustFinish]);
   if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   if (!lecture) return <ScreenContainer className="p-5"><AppHeader title="المحاضرة" action={<IconButton icon="arrow-forward" label="رجوع" onPress={() => router.back()} />} /><EmptyState icon="error-outline" title="لم نجد هذه المحاضرة" description="ارجع إلى المادة واختر محاضرة متاحة." /></ScreenContainer>;
 
@@ -40,6 +57,22 @@ export default function LectureDetailScreen() {
     if (playerStatus.playing) { player.pause(); return; }
     if (playerStatus.duration > 0 && playerStatus.currentTime >= playerStatus.duration) player.seekTo(0);
     player.play();
+  };
+
+  const selectPart = (index: number, seekSeconds = 0, play = false) => {
+    if (index < 0 || index >= audioParts.length) return;
+    player.pause();
+    setPendingPlayback({ seekSeconds, play });
+    setActivePartIndex(index);
+  };
+
+  const playTranscriptSegment = (startSeconds: number) => {
+    let offset = 0;
+    for (let index = 0; index < audioParts.length; index += 1) {
+      const duration = audioParts[index].durationSeconds;
+      if (startSeconds < offset + duration || index === audioParts.length - 1) { selectPart(index, Math.max(0, startSeconds - offset), true); return; }
+      offset += duration;
+    }
   };
 
   const transcribe = async () => {
@@ -154,12 +187,15 @@ export default function LectureDetailScreen() {
   const statusText = lecture.transcriptionStatus === "completed" ? "تم التحويل إلى نص" : lecture.transcriptionStatus === "processing" ? "يجري التحويل" : lecture.transcriptionStatus === "failed" ? "فشل التحويل" : "محفوظ محلياً";
   const statusTone = lecture.transcriptionStatus === "completed" ? "success" : lecture.transcriptionStatus === "processing" ? "warning" : "neutral";
   const audioProgress = playerStatus.duration ? Math.min(100, (playerStatus.currentTime / playerStatus.duration) * 100) : 0;
+  const activePart = audioParts[activePartIndex];
 
   return <ScreenContainer className="px-5"><AppHeader eyebrow={subject?.title ?? "محاضرة"} title={lecture.title} action={<IconButton icon="arrow-forward" label="رجوع" onPress={() => router.back()} tone="neutral" />} /><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     <View style={styles.audioCard}>
       <View style={styles.audioTop}><StatusPill label={lecture.section === "theory" ? "نظري" : "عملي"} tone="primary" /><Text style={styles.date}>{new Date(lecture.recordedAt).toLocaleDateString("ar", { month: "long", day: "numeric" })}</Text></View>
       <View style={styles.wave}>{[18, 30, 46, 25, 54, 34, 20].map((height, index) => <View key={index} style={[styles.waveLine, { height }]} />)}</View>
-      <View style={styles.playRow}><Text style={styles.duration}>{formatDuration(Math.floor(playerStatus.duration || lecture.durationSeconds))}</Text><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${audioProgress}%` }]} /></View><Text style={styles.duration}>{formatDuration(Math.floor(playerStatus.currentTime || 0))}</Text></View>
+      {audioParts.length > 1 ? <View style={styles.partTabs}>{audioParts.map((part, index) => <Pressable key={part.id} onPress={() => selectPart(index)} style={[styles.partTab, activePartIndex === index && styles.partTabActive]}><Text style={[styles.partTabText, activePartIndex === index && styles.partTabTextActive]}>الجزء {index + 1}</Text></Pressable>)}</View> : null}
+      <View style={styles.playRow}><Text style={styles.duration}>{formatDuration(Math.floor(playerStatus.duration || activePart?.durationSeconds || lecture.durationSeconds))}</Text><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${audioProgress}%` }]} /></View><Text style={styles.duration}>{formatDuration(Math.floor(playerStatus.currentTime || 0))}</Text></View>
+      {audioParts.length > 1 ? <Text style={styles.partLabel}>الجزء {activePartIndex + 1} من {audioParts.length}</Text> : null}
       <Pressable onPress={togglePlayback} style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}><MaterialIcons name={playerStatus.playing ? "pause" : "play-arrow"} size={27} color="#FFFFFF" /><Text style={styles.playText}>{playerStatus.playing ? "إيقاف مؤقت" : "تشغيل التسجيل"}</Text></Pressable>
     </View>
 
@@ -169,7 +205,7 @@ export default function LectureDetailScreen() {
     <Pressable disabled={encryptedUpload.isPending} onPress={() => void backupMediaEncrypted()} style={({ pressed }) => [styles.encryptedBackup, encryptedUpload.isPending && styles.disabled, pressed && styles.pressed]}><MaterialIcons name="lock" size={19} color={appTheme.success} /><Text style={styles.encryptedBackupText}>{encryptedUpload.isPending ? "يجري التشفير والحفظ" : "إنشاء نسخة مشفرة للملفات"}</Text></Pressable>
 
     <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>النص</Text><StatusPill label={statusText} tone={statusTone} /></View>
-    {lecture.transcript ? <View style={styles.transcriptCard}>{lecture.transcriptSegments?.length ? lecture.transcriptSegments.map((segment) => <Pressable key={segment.id} onPress={() => { player.seekTo(segment.startSeconds); player.play(); }} style={({ pressed }) => [styles.segmentLine, pressed && styles.pressed]}><MaterialIcons name="play-circle-outline" size={18} color={appTheme.primary} /><Text style={styles.segmentText}>{segment.text}</Text><Text style={styles.segmentTime}>{formatDuration(Math.floor(segment.startSeconds))}</Text></Pressable>) : <Text style={styles.transcript}>{lecture.transcript}</Text>}</View> : <ActionCard icon="text-snippet" color={appTheme.primary} title={lecture.transcriptionStatus === "failed" ? "تعذر التحويل سابقاً" : "حوّل التسجيل إلى نص"} description={lecture.transcriptionStatus === "failed" ? lecture.retryReason ?? "تحقق من الشبكة ثم أعد المحاولة." : "يُرفع التسجيل عند اختيارك لهذه الخطوة فقط ثم يحفظ النص مع المحاضرة."}>{isTranscribing || lecture.transcriptionStatus === "processing" ? <ProgressNotice progress={lecture.transcriptionProgress ?? 15} label="يجري رفع التسجيل وتحويله" /> : <PrimaryButton label={lecture.transcriptionStatus === "failed" ? "إعادة المحاولة" : "تحويل إلى نص"} icon="text-snippet" onPress={transcribe} />}</ActionCard>}
+    {lecture.transcript ? <View style={styles.transcriptCard}>{lecture.transcriptSegments?.length ? lecture.transcriptSegments.map((segment) => <Pressable key={segment.id} onPress={() => playTranscriptSegment(segment.startSeconds)} style={({ pressed }) => [styles.segmentLine, pressed && styles.pressed]}><MaterialIcons name="play-circle-outline" size={18} color={appTheme.primary} /><Text style={styles.segmentText}>{segment.text}</Text><Text style={styles.segmentTime}>{formatDuration(Math.floor(segment.startSeconds))}</Text></Pressable>) : <Text style={styles.transcript}>{lecture.transcript}</Text>}</View> : <ActionCard icon="text-snippet" color={appTheme.primary} title={lecture.transcriptionStatus === "failed" ? "تعذر التحويل سابقاً" : "حوّل التسجيل إلى نص"} description={lecture.transcriptionStatus === "failed" ? lecture.retryReason ?? "تحقق من الشبكة ثم أعد المحاولة." : "يُرفع التسجيل عند اختيارك لهذه الخطوة فقط ثم يحفظ النص مع المحاضرة."}>{isTranscribing || lecture.transcriptionStatus === "processing" ? <ProgressNotice progress={lecture.transcriptionProgress ?? 15} label="يجري رفع التسجيل وتحويله" /> : <PrimaryButton label={lecture.transcriptionStatus === "failed" ? "إعادة المحاولة" : "تحويل إلى نص"} icon="text-snippet" onPress={transcribe} />}</ActionCard>}
 
     {lecture.transcript ? <><View style={styles.sectionHeader}><Text style={styles.sectionTitle}>الملخص الذكي</Text>{lecture.summary ? <StatusPill label="جاهز للمراجعة" tone="success" /> : null}</View>{lecture.summary ? <><SummaryView summary={lecture.summary} /><View style={styles.reviewAction}><PrimaryButton label="إضافة أسئلة إلى المراجعة" icon="style" onPress={createReviewCards} /></View></> : <ActionCard icon="psychology" color={appTheme.violet} title={lecture.summaryStatus === "failed" ? "تعذر التلخيص سابقاً" : "رتّب أهم ما في المحاضرة"} description={lecture.summaryStatus === "failed" ? lecture.retryReason ?? "أعد المحاولة بعد التأكد من الاتصال." : "ينشئ ملخصاً ونقاطاً ومصطلحات وأسئلة مراجعة من النص."}>{summarize.isPending || lecture.summaryStatus === "processing" ? <ProgressNotice progress={lecture.summaryProgress ?? 20} label="يجري إنشاء الملخص الذكي" /> : <PrimaryButton label={lecture.summaryStatus === "failed" ? "إعادة المحاولة" : "إنشاء ملخص"} icon="auto-awesome" onPress={createSummary} />}</ActionCard>}</> : null}
   </ScrollView></ScreenContainer>;
@@ -183,6 +219,7 @@ function formatDuration(seconds: number) { return `${Math.floor(seconds / 60).to
 
 const styles = StyleSheet.create({
   content: { gap: 17, paddingBottom: 32 }, audioCard: { backgroundColor: appTheme.ink, borderRadius: 25, padding: 19 }, audioTop: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between" }, date: { color: "#CBD5E1", fontSize: 12 }, wave: { alignItems: "center", flexDirection: "row-reverse", gap: 7, height: 68, justifyContent: "center", marginTop: 10 }, waveLine: { backgroundColor: "#A5B4FC", borderRadius: 10, opacity: 0.9, width: 7 }, playRow: { alignItems: "center", flexDirection: "row-reverse", gap: 9, marginBottom: 15 }, duration: { color: "#CBD5E1", fontSize: 11, fontVariant: ["tabular-nums"] }, progressTrack: { backgroundColor: "#334155", borderRadius: 5, flex: 1, height: 5, overflow: "hidden" }, progressFill: { backgroundColor: "#A5B4FC", borderRadius: 5, height: 5 }, playButton: { alignItems: "center", backgroundColor: appTheme.primary, borderRadius: 14, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 47 }, playText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  partTabs: { flexDirection: "row-reverse", gap: 6, marginBottom: 12, overflow: "hidden" }, partTab: { backgroundColor: "#334155", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 }, partTabActive: { backgroundColor: "#E0E7FF" }, partTabText: { color: "#CBD5E1", fontSize: 11, fontWeight: "800" }, partTabTextActive: { color: appTheme.primary }, partLabel: { color: "#CBD5E1", fontSize: 11, marginBottom: 8, textAlign: "center" },
   attachmentsCard: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 19, borderWidth: 1, gap: 11, padding: 14 }, attachmentsHeader: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between" }, attachmentActions: { flexDirection: "row-reverse", gap: 7 }, attachmentAction: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderRadius: 11, flex: 1, gap: 4, justifyContent: "center", minHeight: 57, paddingHorizontal: 3 }, attachmentActionText: { color: appTheme.primary, fontSize: 10, fontWeight: "800", textAlign: "center" }, attachmentRow: { alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 12, flexDirection: "row-reverse", gap: 7, padding: 9 }, attachmentOpen: { alignItems: "center", flex: 1, flexDirection: "row-reverse", gap: 7 }, attachmentTitle: { color: appTheme.ink, flex: 1, fontSize: 12, fontWeight: "700", textAlign: "right" }, attachmentDelete: { alignItems: "center", backgroundColor: appTheme.dangerSoft, borderRadius: 9, height: 29, justifyContent: "center", width: 29 },
   exportButton: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderColor: "#C7D2FE", borderRadius: 15, borderWidth: 1, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 48 }, exportText: { color: appTheme.primary, fontSize: 14, fontWeight: "800" }, disabled: { opacity: 0.45 }, sectionHeader: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between", marginTop: 3 }, sectionTitle: { color: appTheme.ink, fontSize: 19, fontWeight: "800" }, transcriptCard: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 18, borderWidth: 1, padding: 16 }, transcript: { color: appTheme.ink, fontSize: 15, lineHeight: 27, textAlign: "right" }, segmentLine: { alignItems: "flex-start", borderBottomColor: appTheme.border, borderBottomWidth: 1, flexDirection: "row-reverse", gap: 8, paddingVertical: 10 }, segmentText: { color: appTheme.ink, flex: 1, fontSize: 14, lineHeight: 22, textAlign: "right" }, segmentTime: { color: appTheme.primary, fontSize: 11, fontVariant: ["tabular-nums"], marginTop: 3 }, actionCard: { alignItems: "center", backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 19, borderWidth: 1, gap: 12, padding: 17 }, actionCopy: { alignItems: "flex-end", width: "100%" }, actionTitle: { color: appTheme.ink, fontSize: 16, fontWeight: "800", textAlign: "right" }, actionBody: { color: appTheme.muted, fontSize: 12, lineHeight: 19, textAlign: "right" }, progressNotice: { alignSelf: "stretch", gap: 8 }, progressTrackLight: { backgroundColor: "#E2E8F0", borderRadius: 5, height: 7, overflow: "hidden" }, progressFillLight: { backgroundColor: appTheme.primary, borderRadius: 5, height: 7 }, progressNoticeText: { color: appTheme.primary, fontSize: 12, fontWeight: "700", textAlign: "center" }, reviewAction: { marginTop: -8 },
   encryptedBackup: { alignItems: "center", backgroundColor: appTheme.successSoft, borderColor: "#99F6E4", borderRadius: 15, borderWidth: 1, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 48 }, encryptedBackupText: { color: appTheme.success, fontSize: 14, fontWeight: "800" },
