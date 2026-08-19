@@ -1,0 +1,168 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+
+import type {
+  AcademicTerm,
+  AcademicYear,
+  Lecture,
+  LectureSummary,
+  StudyStore,
+  Subject,
+  SubjectSection,
+  TermKind,
+} from "@/lib/study-types";
+import { createActiveAcademicYear, deactivateAcademicYears, findOrCreateTerm, normalizeRequiredTitle } from "@/lib/study-domain";
+
+const STORE_KEY = "muhadir.study-store.v1";
+
+const emptyStore: StudyStore = { years: [], terms: [], subjects: [], lectures: [] };
+
+type AddSubjectInput = {
+  title: string;
+  color: string;
+  hasPracticalSection: boolean;
+  theoryInstructor: string;
+  practicalInstructor?: string;
+};
+
+type CreateLectureInput = Omit<Lecture, "id" | "recordedAt" | "transcriptionStatus" | "summaryStatus"> & {
+  transcriptionStatus?: Lecture["transcriptionStatus"];
+  summaryStatus?: Lecture["summaryStatus"];
+};
+
+type StudyContextValue = StudyStore & {
+  hydrated: boolean;
+  addYear: (title: string) => string;
+  addTerm: (yearId: string, kind: TermKind) => string;
+  addSubject: (termId: string, input: AddSubjectInput) => string;
+  addLecture: (input: CreateLectureInput) => string;
+  updateLecture: (lectureId: string, changes: Partial<Pick<Lecture, "title" | "audioUri" | "durationSeconds" | "transcript" | "summary" | "transcriptionStatus" | "summaryStatus">>) => void;
+  getYear: (id: string) => AcademicYear | undefined;
+  getTerm: (id: string) => AcademicTerm | undefined;
+  getSubject: (id: string) => Subject | undefined;
+  getTermForYear: (yearId: string, kind: TermKind) => AcademicTerm | undefined;
+  getLecturesForSubject: (subjectId: string, section?: SubjectSection) => Lecture[];
+};
+
+const StudyContext = createContext<StudyContextValue | null>(null);
+
+function makeId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function StudyProvider({ children }: { children: React.ReactNode }) {
+  const [store, setStore] = useState<StudyStore>(emptyStore);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORE_KEY);
+        if (saved) setStore(JSON.parse(saved) as StudyStore);
+      } catch {
+        setStore(emptyStore);
+      } finally {
+        setHydrated(true);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    void AsyncStorage.setItem(STORE_KEY, JSON.stringify(store));
+  }, [store, hydrated]);
+
+  const value = useMemo<StudyContextValue>(() => {
+    const getYear = (id: string) => store.years.find((year) => year.id === id);
+    const getTerm = (id: string) => store.terms.find((term) => term.id === id);
+    const getSubject = (id: string) => store.subjects.find((subject) => subject.id === id);
+
+    return {
+      ...store,
+      hydrated,
+      addYear: (title) => {
+        const id = makeId("year");
+        const createdAt = new Date().toISOString();
+        const year = createActiveAcademicYear(id, title, createdAt);
+        setStore((current) => ({
+          ...current,
+          years: [
+            ...deactivateAcademicYears(current.years),
+            year,
+          ],
+        }));
+        return id;
+      },
+      addTerm: (yearId, kind) => {
+        const id = makeId("term");
+        const result = findOrCreateTerm(store.terms, yearId, kind, id, new Date().toISOString());
+        if (!result.isNew) return result.term.id;
+        setStore((current) => ({
+          ...current,
+          terms: [...current.terms, result.term],
+        }));
+        return id;
+      },
+      addSubject: (termId, input) => {
+        const normalizedTitle = normalizeRequiredTitle(input.title, "اسم المادة");
+        const id = makeId("subject");
+        setStore((current) => ({
+          ...current,
+          subjects: [
+            ...current.subjects,
+            {
+              id,
+              termId,
+              title: normalizedTitle,
+              color: input.color,
+              hasPracticalSection: input.hasPracticalSection,
+              theoryInstructor: input.theoryInstructor.trim() || "غير محدد",
+              practicalInstructor: input.hasPracticalSection ? input.practicalInstructor?.trim() || "غير محدد" : undefined,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        }));
+        return id;
+      },
+      addLecture: (input) => {
+        const id = makeId("lecture");
+        setStore((current) => ({
+          ...current,
+          lectures: [
+            {
+              ...input,
+              id,
+              recordedAt: new Date().toISOString(),
+              transcriptionStatus: input.transcriptionStatus ?? "local",
+              summaryStatus: input.summaryStatus ?? "local",
+            },
+            ...current.lectures,
+          ],
+        }));
+        return id;
+      },
+      updateLecture: (lectureId, changes) => {
+        setStore((current) => ({
+          ...current,
+          lectures: current.lectures.map((lecture) => (lecture.id === lectureId ? { ...lecture, ...changes } : lecture)),
+        }));
+      },
+      getYear,
+      getTerm,
+      getSubject,
+      getTermForYear: (yearId, kind) => store.terms.find((term) => term.yearId === yearId && term.kind === kind),
+      getLecturesForSubject: (subjectId, section) =>
+        store.lectures.filter((lecture) => lecture.subjectId === subjectId && (!section || lecture.section === section)),
+    };
+  }, [hydrated, store]);
+
+  return <StudyContext.Provider value={value}>{children}</StudyContext.Provider>;
+}
+
+export function useStudy() {
+  const context = useContext(StudyContext);
+  if (!context) throw new Error("يجب استخدام useStudy داخل StudyProvider.");
+  return context;
+}
+
+export type { LectureSummary };
