@@ -44,7 +44,7 @@ function makeId(prefix: string) { return `${prefix}-${Date.now()}-${Math.random(
 function normalizeStore(value: Partial<StudyStore>): StudyStore {
   return {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [],
-    lectures: value.lectures?.map((lecture) => ({ ...lecture, attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [] })) ?? [],
+    lectures: value.lectures?.map((lecture) => ({ ...lecture, attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
     reviewCards: value.reviewCards ?? [], tasks: value.tasks ?? [],
     syncSettings: { cloudBackupEnabled: false, lastBackupStatus: "idle", ...value.syncSettings },
   };

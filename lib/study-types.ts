@@ -49,6 +49,15 @@ export interface LectureAttachment {
   createdAt: string;
 }
 
+export interface LectureAudioPart {
+  id: string;
+  index: number;
+  uri: string;
+  durationSeconds: number;
+  sizeBytes?: number;
+  createdAt: string;
+}
+
 export interface Lecture {
   id: string;
   subjectId: string;
@@ -58,6 +67,7 @@ export interface Lecture {
   durationSeconds: number;
   audioUri?: string;
   audioSizeBytes?: number;
+  audioParts?: LectureAudioPart[];
   transcript?: string;
   transcriptSegments?: TranscriptSegment[];
   summary?: LectureSummary;

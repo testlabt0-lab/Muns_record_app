@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, studyBackups, users } from "../drizzle/schema";
+import { encryptedMediaBackups, InsertUser, studyBackups, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -100,4 +100,25 @@ export async function getStudyBackup(userId: number) {
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً.");
   const rows = await db.select().from(studyBackups).where(eq(studyBackups.userId, userId)).limit(1);
   return rows[0];
+}
+
+export async function saveEncryptedMediaBackup(input: typeof encryptedMediaBackups.$inferInsert) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً.");
+  const result = await db.insert(encryptedMediaBackups).values(input);
+  return Number(result[0].insertId);
+}
+
+export async function listEncryptedMediaBackups(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً.");
+  return db.select().from(encryptedMediaBackups).where(eq(encryptedMediaBackups.userId, userId));
+}
+
+export async function getEncryptedMediaBackup(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً.");
+  const rows = await db.select().from(encryptedMediaBackups).where(eq(encryptedMediaBackups.id, id)).limit(1);
+  const result = rows[0];
+  return result?.userId === userId ? result : undefined;
 }

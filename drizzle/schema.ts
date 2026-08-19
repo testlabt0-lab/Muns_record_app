@@ -33,3 +33,19 @@ export const studyBackups = mysqlTable("studyBackups", {
 });
 
 export type StudyBackup = typeof studyBackups.$inferSelect;
+
+export const encryptedMediaBackups = mysqlTable("encryptedMediaBackups", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  lectureId: varchar("lectureId", { length: 160 }).notNull(),
+  sourceId: varchar("sourceId", { length: 160 }),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  contentType: varchar("contentType", { length: 128 }).notNull(),
+  storageKey: varchar("storageKey", { length: 512 }).notNull(),
+  ivLength: int("ivLength").notNull(),
+  tagLength: int("tagLength").notNull(),
+  originalSize: int("originalSize").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EncryptedMediaBackup = typeof encryptedMediaBackups.$inferSelect;

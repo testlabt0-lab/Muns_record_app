@@ -4,6 +4,9 @@ import { invokeLLM, listLLMModels } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
+import { isAudioBackupEncryptionConfigured } from "./audio-backup-crypto";
+import { decryptAudioBackup, encryptAudioBackup } from "./audio-backup-crypto";
+import { storageGetSignedUrl, storagePut } from "./storage";
 import { z } from "zod";
 
 const rawLectureSummarySchema = z.object({
@@ -75,6 +78,28 @@ export const appRouter = router({
     load: protectedProcedure.query(async ({ ctx }) => {
       const backup = await db.getStudyBackup(ctx.user.id);
       return backup ? { payload: backup.payload, updatedAt: backup.updatedAt.toISOString() } : null;
+    }),
+  }),
+  backupCrypto: router({
+    health: publicProcedure.query(() => ({ configured: isAudioBackupEncryptionConfigured() })),
+  }),
+  encryptedMedia: router({
+    upload: protectedProcedure.input(z.object({ lectureId: z.string().min(1).max(160), sourceId: z.string().max(160).optional(), fileName: z.string().min(1).max(255), contentType: z.string().min(1).max(128), dataBase64: z.string().min(4).max(22_500_000) })).mutation(async ({ ctx, input }) => {
+      const raw = Buffer.from(input.dataBase64, "base64");
+      if (!raw.length || raw.length > 16 * 1024 * 1024) throw new Error("حجم الملف غير صالح للنسخ المشفر.");
+      const encrypted = encryptAudioBackup(raw);
+      const { key } = await storagePut(`encrypted-study-backups/${ctx.user.id}/${Date.now()}.bin`, encrypted.encrypted, "application/octet-stream");
+      const id = await db.saveEncryptedMediaBackup({ userId: ctx.user.id, lectureId: input.lectureId, sourceId: input.sourceId, fileName: input.fileName, contentType: input.contentType, storageKey: key, ivLength: encrypted.ivLength, tagLength: encrypted.tagLength, originalSize: raw.length });
+      return { id };
+    }),
+    list: protectedProcedure.query(({ ctx }) => db.listEncryptedMediaBackups(ctx.user.id)),
+    restore: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+      const record = await db.getEncryptedMediaBackup(ctx.user.id, input.id);
+      if (!record) throw new Error("لم نعثر على هذا الملف في نسختك الاحتياطية.");
+      const response = await fetch(await storageGetSignedUrl(record.storageKey));
+      if (!response.ok) throw new Error("تعذر جلب الملف المشفر من التخزين.");
+      const decrypted = decryptAudioBackup(Buffer.from(await response.arrayBuffer()), record.ivLength, record.tagLength);
+      return { fileName: record.fileName, contentType: record.contentType, dataBase64: decrypted.toString("base64"), lectureId: record.lectureId };
     }),
   }),
 
