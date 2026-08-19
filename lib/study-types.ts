@@ -117,6 +117,15 @@ export interface SyncSettings {
   lastBackupStatus?: "idle" | "completed" | "failed";
 }
 
+export interface BackupActivity {
+  id: string;
+  action: "backup" | "restore" | "media-backup" | "media-restore";
+  status: "completed" | "failed" | "paused";
+  message: string;
+  fileCount?: number;
+  createdAt: string;
+}
+
 export interface StudyStore {
   years: AcademicYear[];
   terms: AcademicTerm[];
@@ -125,4 +134,5 @@ export interface StudyStore {
   reviewCards: ReviewCard[];
   tasks: StudyTask[];
   syncSettings: SyncSettings;
+  backupActivities?: BackupActivity[];
 }

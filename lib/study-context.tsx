@@ -2,12 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { createActiveAcademicYear, deactivateAcademicYears, findOrCreateTerm, normalizeRequiredTitle } from "@/lib/study-domain";
-import type { AcademicTerm, AcademicYear, Lecture, LectureAttachment, LectureSummary, ReviewCard, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
+import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
 
 const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
-  years: [], terms: [], subjects: [], lectures: [], reviewCards: [], tasks: [],
+  years: [], terms: [], subjects: [], lectures: [], reviewCards: [], tasks: [], backupActivities: [],
   syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, lastBackupStatus: "idle" },
 };
 
@@ -29,6 +29,7 @@ type StudyContextValue = StudyStore & {
   addTask: (task: Omit<StudyTask, "id" | "createdAt" | "completed">) => string;
   updateTask: (taskId: string, changes: Partial<Pick<StudyTask, "title" | "dueAt" | "completed" | "notificationId" | "calendarEventId">>) => void;
   updateSyncSettings: (changes: Partial<StudyStore["syncSettings"]>) => void;
+  addBackupActivity: (activity: Omit<BackupActivity, "id" | "createdAt">) => void;
   replaceStoreFromBackup: (backup: Partial<StudyStore>) => void;
   getYear: (id: string) => AcademicYear | undefined;
   getTerm: (id: string) => AcademicTerm | undefined;
@@ -45,7 +46,7 @@ function normalizeStore(value: Partial<StudyStore>): StudyStore {
   return {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [],
     lectures: value.lectures?.map((lecture) => ({ ...lecture, attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
-    reviewCards: value.reviewCards ?? [], tasks: value.tasks ?? [],
+    reviewCards: value.reviewCards ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
     syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, lastBackupStatus: "idle", ...value.syncSettings },
   };
 }
@@ -104,6 +105,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       addTask: (task) => { const id = makeId("task"); setStore((current) => ({ ...current, tasks: [...current.tasks, { ...task, id, completed: false, createdAt: new Date().toISOString() }] })); return id; },
       updateTask: (taskId, changes) => setStore((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, ...changes } : task) })),
       updateSyncSettings: (changes) => setStore((current) => ({ ...current, syncSettings: { ...current.syncSettings, ...changes } })),
+      addBackupActivity: (activity) => setStore((current) => ({ ...current, backupActivities: [{ ...activity, id: makeId("backup-activity"), createdAt: new Date().toISOString() }, ...(current.backupActivities ?? [])].slice(0, 30) })),
       replaceStoreFromBackup: (backup) => setStore(normalizeStore({ ...backup, syncSettings: { ...backup.syncSettings, cloudBackupEnabled: true, lastBackupStatus: "completed", lastBackupAt: new Date().toISOString() } })),
       getYear, getTerm, getSubject,
       getTermForYear: (yearId, kind) => store.terms.find((term) => term.yearId === yearId && term.kind === kind),

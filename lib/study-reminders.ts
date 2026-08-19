@@ -24,3 +24,17 @@ export async function scheduleStudyReminder(title: string, dueAt: string, taskId
 export async function cancelStudyReminder(notificationId?: string) {
   if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
 }
+
+export async function notifyBackupOutcome(status: "completed" | "failed", message: string) {
+  if (Platform.OS === "web") return;
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("study-backups", { name: "حالة النسخ الاحتياطي", importance: Notifications.AndroidImportance.DEFAULT });
+  }
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return;
+  await Notifications.scheduleNotificationAsync({
+    content: { title: status === "completed" ? "اكتملت النسخة الاحتياطية" : "تعذر النسخ الاحتياطي", body: message, data: { url: "/settings" } },
+    trigger: null,
+  });
+}
