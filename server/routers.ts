@@ -101,6 +101,11 @@ export const appRouter = router({
       const decrypted = decryptAudioBackup(Buffer.from(await response.arrayBuffer()), record.ivLength, record.tagLength);
       return { fileName: record.fileName, contentType: record.contentType, dataBase64: decrypted.toString("base64"), lectureId: record.lectureId, sourceId: record.sourceId, originalSize: record.originalSize };
     }),
+    remove: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const removed = await db.deleteEncryptedMediaBackup(ctx.user.id, input.id);
+      if (!removed) throw new Error("لم نعثر على هذه النسخة المشفرة أو لا تملك صلاحية حذفها.");
+      return { id: removed.id, fileName: removed.fileName };
+    }),
   }),
 
   // TODO: add feature routers here, e.g.

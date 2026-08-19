@@ -122,3 +122,12 @@ export async function getEncryptedMediaBackup(userId: number, id: number) {
   const result = rows[0];
   return result?.userId === userId ? result : undefined;
 }
+
+export async function deleteEncryptedMediaBackup(userId: number, id: number) {
+  const record = await getEncryptedMediaBackup(userId, id);
+  if (!record) return undefined;
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً.");
+  await db.delete(encryptedMediaBackups).where(eq(encryptedMediaBackups.id, id));
+  return record;
+}
