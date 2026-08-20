@@ -7,6 +7,7 @@ import { AppHeader, PrimaryButton, StatusPill } from "@/components/study-ui";
 import { startOAuthLogin } from "@/constants/oauth";
 import { useAuth } from "@/hooks/use-auth";
 import { appTheme } from "@/lib/app-theme";
+import { useAppLock } from "@/lib/app-lock";
 import { createBackupPayload, parseBackupPayload } from "@/lib/backup-payload";
 import { formatBytes } from "@/lib/lecture-export-template";
 import { attachmentKindFromMime, persistBase64Attachment } from "@/lib/local-attachments";
@@ -18,6 +19,7 @@ import { ScreenContainer } from "@/components/screen-container";
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const { enabled: appLockEnabled, supported: appLockSupported, enable: enableAppLock, disable: disableAppLock } = useAppLock();
   const { years, terms, subjects, lectures, reviewCards, tasks, syncSettings, updateSyncSettings, replaceStoreFromBackup, updateLecture, addAttachment, backupActivities, addBackupActivity } = useStudy();
   const [partMinutes, setPartMinutes] = useState(String(syncSettings.recordingPartMinutes ?? 20));
   const [showMediaPicker, setShowMediaPicker] = useState(false);
@@ -27,6 +29,7 @@ export default function SettingsScreen() {
   const [activityTypeFilter, setActivityTypeFilter] = useState<"all" | "backup" | "restore" | "media">("all");
   const [retentionDays, setRetentionDays] = useState<30 | 90 | 180>(90);
   const [weeklyDigestBusy, setWeeklyDigestBusy] = useState(false);
+  const [appLockBusy, setAppLockBusy] = useState(false);
   const saveBackup = trpc.studySync.save.useMutation();
   const loadBackup = trpc.studySync.load.useQuery(undefined, { enabled: false });
   const encryptedMedia = trpc.encryptedMedia.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -126,6 +129,17 @@ export default function SettingsScreen() {
     Alert.alert("تم حفظ الحد", `سيبدأ جزء صوتي جديد تلقائياً كل ${value} دقيقة.`);
   };
 
+  const toggleAppLock = async () => {
+    if (appLockBusy) return;
+    if (!appLockSupported) { Alert.alert("غير متاح في الويب", "قفل الجهاز يعمل في تطبيق iOS أو Android فقط."); return; }
+    setAppLockBusy(true);
+    try {
+      if (appLockEnabled) { await disableAppLock(); Alert.alert("تم إيقاف قفل التطبيق", "لن يطلب التطبيق التحقق عند العودة من الخلفية."); }
+      else { await enableAppLock(); Alert.alert("تم تفعيل قفل التطبيق", "سيطلب التطبيق البصمة أو رمز قفل جهازك عند العودة من الخلفية."); }
+    } catch (error) { Alert.alert("تعذر تحديث القفل", error instanceof Error ? error.message : "حاول مرة أخرى من جهاز الهاتف."); }
+    finally { setAppLockBusy(false); }
+  };
+
   const toggleWeeklyDigest = async () => {
     if (weeklyDigestBusy) return;
     setWeeklyDigestBusy(true);
@@ -149,6 +163,7 @@ export default function SettingsScreen() {
       <AppHeader eyebrow="التحكم والخصوصية" title="الإعدادات" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.notice}><MaterialIcons name="verified-user" size={23} color={appTheme.success} /><View style={styles.noticeText}><Text style={styles.noticeTitle}>ملفاتك تحت سيطرتك</Text><Text style={styles.noticeBody}>يحفظ التطبيق بياناتك محلياً. لا يبدأ التحويل أو النسخ الاحتياطي أو المشاركة إلا بطلبك.</Text></View></View>
+        <View style={styles.limitCard}><View style={styles.limitHeading}><MaterialIcons name="fingerprint" size={21} color={appTheme.primary} /><View style={styles.rowText}><Text style={styles.rowTitle}>قفل التطبيق</Text><Text style={styles.rowDetail}>يستخدم البصمة أو رمز قفل الجهاز لحماية المحاضرات عند العودة من الخلفية.</Text></View><StatusPill label={appLockEnabled ? "مفعّل" : "غير مفعّل"} tone={appLockEnabled ? "success" : "neutral"} /></View><Pressable disabled={appLockBusy} onPress={() => void toggleAppLock()} style={[styles.restoreMediaButton, appLockBusy && styles.disabled]}><MaterialIcons name={appLockEnabled ? "lock-open" : "lock"} size={18} color={appTheme.success} /><Text style={styles.restoreMediaText}>{appLockBusy ? "يجري التحقق" : appLockEnabled ? "إيقاف قفل التطبيق" : "تفعيل قفل التطبيق"}</Text></Pressable></View>
         <Pressable onPress={() => router.push("/storage" as never)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}><View style={styles.rowIcon}><MaterialIcons name="storage" size={21} color={appTheme.primary} /></View><View style={styles.rowText}><Text style={styles.rowTitle}>إدارة مساحة التخزين</Text><Text style={styles.rowDetail}>{lectures.length} محاضرة · {formatBytes(knownSize)} معروف الحجم</Text></View><MaterialIcons name="chevron-left" size={22} color="#94A3B8" /></Pressable>
         <View style={styles.limitCard}><View style={styles.limitHeading}><MaterialIcons name="call-split" size={21} color={appTheme.primary} /><View style={styles.rowText}><Text style={styles.rowTitle}>حد تقسيم التسجيل</Text><Text style={styles.rowDetail}>ينشئ التطبيق جزءاً صوتياً جديداً تلقائياً قبل أن يصبح الملف طويلاً.</Text></View></View><View style={styles.limitControls}><TextInput value={partMinutes} onChangeText={setPartMinutes} keyboardType="number-pad" maxLength={2} textAlign="center" style={styles.limitInput} /><Text style={styles.limitUnit}>دقيقة</Text><Pressable onPress={saveRecordingLimit} style={styles.limitSave}><Text style={styles.limitSaveText}>حفظ</Text></Pressable></View></View>
         <View style={styles.backupCard}><View style={styles.backupHeading}><StatusPill label={syncSettings.cloudBackupEnabled ? "اختياري ومفعّل" : "غير مفعّل"} tone={syncSettings.cloudBackupEnabled ? "success" : "neutral"} /><View style={styles.rowText}><Text style={styles.rowTitle}>نسخ احتياطي اختياري</Text><Text style={styles.rowDetail}>{isAuthenticated ? `مرتبط بـ ${user?.name ?? "حسابك"}` : "لا يتم رفع بيانات قبل تسجيل الدخول وموافقتك."}</Text></View><MaterialIcons name="cloud-upload" size={23} color={appTheme.primary} /></View><View style={styles.backupActions}><Pressable onPress={() => void restoreBackup()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>استعادة البيانات</Text></Pressable><View style={styles.backupMain}><PrimaryButton label={saveBackup.isPending ? "يجري النسخ" : "إنشاء نسخة احتياطية"} icon="backup" disabled={saveBackup.isPending} onPress={createBackup} /></View></View><Pressable disabled={restoreEncryptedMedia.isPending} onPress={restoreMediaFiles} style={[styles.restoreMediaButton, restoreEncryptedMedia.isPending && styles.disabled]}><MaterialIcons name="lock-open" size={18} color={appTheme.success} /><Text style={styles.restoreMediaText}>{restoreProgress ? `استعادة ${restoreProgress.current}/${restoreProgress.total}: ${restoreProgress.fileName}` : `اختيار واستعادة الملفات المشفرة${isAuthenticated ? ` (${(encryptedMedia.data ?? []).length})` : ""}`}</Text></Pressable>{syncSettings.lastBackupAt ? <Text style={styles.backupMeta}>آخر نسخة: {new Date(syncSettings.lastBackupAt).toLocaleString("ar")}</Text> : null}<View style={styles.activityFilters}><Pressable onPress={() => setActivityStatusFilter("all")} style={[styles.activityChip, activityStatusFilter === "all" && styles.activityChipActive]}><Text style={[styles.activityChipText, activityStatusFilter === "all" && styles.activityChipTextActive]}>الكل</Text></Pressable><Pressable onPress={() => setActivityStatusFilter("completed")} style={[styles.activityChip, activityStatusFilter === "completed" && styles.activityChipActive]}><Text style={[styles.activityChipText, activityStatusFilter === "completed" && styles.activityChipTextActive]}>ناجح</Text></Pressable><Pressable onPress={() => setActivityStatusFilter("failed")} style={[styles.activityChip, activityStatusFilter === "failed" && styles.activityChipActive]}><Text style={[styles.activityChipText, activityStatusFilter === "failed" && styles.activityChipTextActive]}>فاشل</Text></Pressable><Pressable onPress={() => setActivityTypeFilter(activityTypeFilter === "media" ? "all" : "media")} style={[styles.activityChip, activityTypeFilter === "media" && styles.activityChipActive]}><Text style={[styles.activityChipText, activityTypeFilter === "media" && styles.activityChipTextActive]}>ملفات</Text></Pressable></View>{visibleActivities.slice(0, 6).map((activity) => <View key={activity.id} style={styles.activityRow}><MaterialIcons name={activity.status === "completed" ? "check-circle" : "error-outline"} size={16} color={activity.status === "completed" ? appTheme.success : appTheme.danger} /><View style={styles.rowText}><Text style={styles.activityText}>{activity.message}</Text><Text style={styles.activityTime}>{new Date(activity.createdAt).toLocaleString("ar")}</Text></View></View>)}</View>

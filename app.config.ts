@@ -51,7 +51,8 @@ const config: ExpoConfig = {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
     "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "نستخدم Face ID لحماية محاضراتك وملفاتك الدراسية داخل مُحاضِر."
       }
   },
   android: {
@@ -112,6 +113,7 @@ const config: ExpoConfig = {
         calendarPermission: "Allow $(PRODUCT_NAME) to add study deadlines to your calendar.",
       },
     ],
+    "expo-local-authentication",
     [
       "expo-notifications",
       {
