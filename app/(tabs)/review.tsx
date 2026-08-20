@@ -1,5 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Print from "expo-print";
@@ -24,12 +24,14 @@ const WEEK_DAYS = [{ id: 0, label: "أحد" }, { id: 1, label: "اثن" }, { id:
 
 export default function ReviewScreen() {
   const router = useRouter();
+  const { subjectId: routeSubjectId, minutes: routeMinutes } = useLocalSearchParams<{ subjectId?: string; minutes?: string }>();
   const { hydrated, reviewCards, reviewLists, reviewSessions, reviewChallenges, subjects, syncSettings, updateSyncSettings, createReviewList, toggleReviewListLecture, deleteReviewList, addReviewSession, createReviewChallenge, deleteReviewChallenge, gradeReviewCard, getSubject, lectures } = useStudy();
   const [revealed, setRevealed] = useState<string | null>(null);
   const [listTitle, setListTitle] = useState("");
   const [selectedLectureIds, setSelectedLectureIds] = useState<string[]>([]);
-  const [sessionMinutes, setSessionMinutes] = useState(15);
-  const [sessionSeconds, setSessionSeconds] = useState(15 * 60);
+  const routeSessionMinutes = TIMER_DURATIONS.includes(Number(routeMinutes)) ? Number(routeMinutes) : 15;
+  const [sessionMinutes, setSessionMinutes] = useState(routeSessionMinutes);
+  const [sessionSeconds, setSessionSeconds] = useState(routeSessionMinutes * 60);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerBusy, setTimerBusy] = useState(false);
   const [timerEndsAt, setTimerEndsAt] = useState<number | undefined>();
@@ -75,6 +77,8 @@ export default function ReviewScreen() {
     return { subject, cards: cards.length, reviewedThisWeek, focusMinutes };
   }).filter((item) => item.cards || item.focusMinutes).sort((a, b) => (b.reviewedThisWeek + b.focusMinutes) - (a.reviewedThisWeek + a.focusMinutes)), [lectures, reviewCards, reviewSessions, subjects]);
   const challengeProgress = useMemo(() => (reviewChallenges ?? []).map((challenge) => ({ challenge, completed: reviewCards.filter((card) => card.lastReviewedAt && new Date(card.lastReviewedAt).getTime() >= Date.now() - WEEK_MS && lectures.find((lecture) => lecture.id === card.lectureId)?.subjectId === challenge.subjectId).length })), [lectures, reviewCards, reviewChallenges]);
+
+  useEffect(() => { if (routeSubjectId && subjects.some((subject) => subject.id === routeSubjectId)) setSessionSubjectId(routeSubjectId); if (TIMER_DURATIONS.includes(Number(routeMinutes))) { const minutes = Number(routeMinutes); setSessionMinutes(minutes); setSessionSeconds(minutes * 60); } }, [routeMinutes, routeSubjectId, subjects]);
 
   useEffect(() => {
     if (!timerRunning || !timerEndsAt) return;
