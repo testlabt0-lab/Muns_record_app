@@ -46,6 +46,7 @@ export interface SubjectWeeklyGoal {
   reviewTarget: number;
   focusMinutesTarget: number;
   updatedAt: string;
+  lateReminderNotifiedAt?: string;
 }
 
 export interface TranscriptSegment {

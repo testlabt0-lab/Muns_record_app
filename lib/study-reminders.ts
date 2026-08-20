@@ -82,6 +82,16 @@ export async function notifySubjectGoalNear(subjectTitle: string, metricLabels: 
   return true;
 }
 
+export async function notifySubjectWeeklyGoalLate(subjectTitle: string) {
+  if (Platform.OS === "web") return false;
+  if (Platform.OS === "android") await Notifications.setNotificationChannelAsync("study-subject-goals", { name: "أهداف المواد", importance: Notifications.AndroidImportance.DEFAULT });
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return false;
+  await Notifications.scheduleNotificationAsync({ content: { title: `هدف ${subjectTitle} يحتاج دفعة`, body: "تقدم الأسبوع أقل من النصف. خصص جلسة قصيرة الآن لتقترب من هدفك.", data: { url: "/subject" } }, trigger: null });
+  return true;
+}
+
 export async function scheduleWeeklyDigestReminder() {
   if (Platform.OS === "web") return undefined;
   if (Platform.OS === "android") {
