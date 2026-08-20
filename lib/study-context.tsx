@@ -9,7 +9,7 @@ const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
   years: [], terms: [], subjects: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [],
-  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], lastBackupStatus: "idle" },
+  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], appearanceMode: "light", lastBackupStatus: "idle" },
 };
 
 type AddSubjectInput = { title: string; color: string; hasPracticalSection: boolean; theoryInstructor: string; practicalInstructor?: string };
@@ -59,7 +59,7 @@ function normalizeStore(value: Partial<StudyStore>): StudyStore {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [],
     lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], tagColors: lecture.tagColors ?? {}, bookmarks: lecture.bookmarks ?? [], attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
     reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], reviewSessions: value.reviewSessions ?? [], reviewChallenges: value.reviewChallenges ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
-    syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], lastBackupStatus: "idle", ...value.syncSettings },
+    syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], appearanceMode: "light", lastBackupStatus: "idle", ...value.syncSettings },
   };
 }
 
