@@ -127,6 +127,8 @@ export interface SyncSettings {
   storageWarningPercent?: number;
   weeklyDigestEnabled?: boolean;
   weeklyDigestNotificationId?: string;
+  weeklyLectureGoal?: number;
+  weeklyReviewGoal?: number;
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
 }
