@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { normalizeWeeklyReviewDays } from "./review-plan-reminders";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }),
@@ -105,4 +106,24 @@ export async function scheduleDailyFocusReminder() {
 
 export async function cancelDailyFocusReminder(notificationId?: string) {
   if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
+}
+
+export async function scheduleWeeklyReviewPlanReminders(days: number[]) {
+  const reviewDays = normalizeWeeklyReviewDays(days);
+  if (Platform.OS === "web" || !reviewDays.length) return undefined;
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("study-review-plan", { name: "خطة المراجعة", importance: Notifications.AndroidImportance.DEFAULT });
+  }
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return undefined;
+  return Promise.all(reviewDays.map((day) => Notifications.scheduleNotificationAsync({
+    content: { title: "موعد المراجعة", body: "اليوم ضمن خطة المراجعة الأسبوعية. افتح مُحاضِر وابدأ جلسة قصيرة.", data: { url: "/review" } },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: day + 1, hour: 18, minute: 0, channelId: "study-review-plan" },
+  })));
+}
+
+export async function cancelWeeklyReviewPlanReminders(notificationIds?: string[]) {
+  if (Platform.OS === "web") return;
+  await Promise.all((notificationIds ?? []).map((notificationId) => Notifications.cancelScheduledNotificationAsync(notificationId)));
 }

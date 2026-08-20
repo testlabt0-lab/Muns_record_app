@@ -9,7 +9,7 @@ const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
   years: [], terms: [], subjects: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [],
-  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], appearanceMode: "light", lastBackupStatus: "idle" },
+  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, appearanceMode: "light", lastBackupStatus: "idle" },
 };
 
 type AddSubjectInput = { title: string; color: string; hasPracticalSection: boolean; theoryInstructor: string; practicalInstructor?: string };
@@ -43,6 +43,7 @@ type StudyContextValue = StudyStore & {
   updateSyncSettings: (changes: Partial<StudyStore["syncSettings"]>) => void;
   addBackupActivity: (activity: Omit<BackupActivity, "id" | "createdAt">) => void;
   replaceStoreFromBackup: (backup: Partial<StudyStore>) => void;
+  replaceStoreFromLocalImport: (store: StudyStore) => void;
   getYear: (id: string) => AcademicYear | undefined;
   getTerm: (id: string) => AcademicTerm | undefined;
   getSubject: (id: string) => Subject | undefined;
@@ -59,7 +60,7 @@ function normalizeStore(value: Partial<StudyStore>): StudyStore {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [],
     lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], tagColors: lecture.tagColors ?? {}, bookmarks: lecture.bookmarks ?? [], attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
     reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], reviewSessions: value.reviewSessions ?? [], reviewChallenges: value.reviewChallenges ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
-    syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], appearanceMode: "light", lastBackupStatus: "idle", ...value.syncSettings },
+    syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, appearanceMode: "light", lastBackupStatus: "idle", ...value.syncSettings },
   };
 }
 
@@ -129,6 +130,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       updateSyncSettings: (changes) => setStore((current) => ({ ...current, syncSettings: { ...current.syncSettings, ...changes } })),
       addBackupActivity: (activity) => setStore((current) => ({ ...current, backupActivities: [{ ...activity, id: makeId("backup-activity"), createdAt: new Date().toISOString() }, ...(current.backupActivities ?? [])].slice(0, 30) })),
       replaceStoreFromBackup: (backup) => setStore(normalizeStore({ ...backup, syncSettings: { ...backup.syncSettings, cloudBackupEnabled: true, lastBackupStatus: "completed", lastBackupAt: new Date().toISOString() } })),
+      replaceStoreFromLocalImport: (nextStore) => setStore(normalizeStore(nextStore)),
       getYear, getTerm, getSubject,
       getTermForYear: (yearId, kind) => store.terms.find((term) => term.yearId === yearId && term.kind === kind),
       getLecturesForSubject: (subjectId, section) => store.lectures.filter((lecture) => lecture.subjectId === subjectId && (!section || lecture.section === section)),

@@ -172,6 +172,8 @@ export interface SyncSettings {
   dailyFocusReminderEnabled?: boolean;
   dailyFocusReminderNotificationId?: string;
   weeklyReviewDays?: number[];
+  weeklyReviewReminderEnabled?: boolean;
+  weeklyReviewReminderNotificationIds?: string[];
   appearanceMode?: "light" | "dark";
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
