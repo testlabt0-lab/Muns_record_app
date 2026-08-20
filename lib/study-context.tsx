@@ -54,7 +54,7 @@ function makeId(prefix: string) { return `${prefix}-${Date.now()}-${Math.random(
 function normalizeStore(value: Partial<StudyStore>): StudyStore {
   return {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [],
-    lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
+    lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], tagColors: lecture.tagColors ?? {}, attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
     reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
     syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, lastBackupStatus: "idle", ...value.syncSettings },
   };
@@ -96,7 +96,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       },
       addLecture: (input) => {
         const id = makeId("lecture");
-        setStore((current) => ({ ...current, lectures: [{ ...input, id, recordedAt: new Date().toISOString(), tags: input.tags ?? [], transcriptionStatus: input.transcriptionStatus ?? "local", summaryStatus: input.summaryStatus ?? "local", attachments: input.attachments ?? [], transcriptSegments: input.transcriptSegments ?? [] }, ...current.lectures] })); return id;
+        setStore((current) => ({ ...current, lectures: [{ ...input, id, recordedAt: new Date().toISOString(), tags: input.tags ?? [], tagColors: input.tagColors ?? {}, transcriptionStatus: input.transcriptionStatus ?? "local", summaryStatus: input.summaryStatus ?? "local", attachments: input.attachments ?? [], transcriptSegments: input.transcriptSegments ?? [] }, ...current.lectures] })); return id;
       },
       updateLecture: (lectureId, changes) => setStore((current) => ({ ...current, lectures: current.lectures.map((lecture) => lecture.id === lectureId ? { ...lecture, ...changes } : lecture) })),
       deleteLecture: (lectureId) => setStore((current) => ({ ...current, lectures: current.lectures.filter((lecture) => lecture.id !== lectureId), reviewCards: current.reviewCards.filter((card) => card.lectureId !== lectureId) })),
