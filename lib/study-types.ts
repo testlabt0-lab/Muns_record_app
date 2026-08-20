@@ -123,6 +123,12 @@ export interface ReviewList {
   createdAt: string;
 }
 
+export interface ReviewSession {
+  id: string;
+  durationMinutes: number;
+  completedAt: string;
+}
+
 export interface StudyTask {
   id: string;
   subjectId?: string;
@@ -144,6 +150,8 @@ export interface SyncSettings {
   weeklyDigestNotificationId?: string;
   weeklyLectureGoal?: number;
   weeklyReviewGoal?: number;
+  weeklyGoalNotificationEnabled?: boolean;
+  weeklyGoalNotificationWeekKey?: string;
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
 }
@@ -164,6 +172,7 @@ export interface StudyStore {
   lectures: Lecture[];
   reviewCards: ReviewCard[];
   reviewLists?: ReviewList[];
+  reviewSessions?: ReviewSession[];
   tasks: StudyTask[];
   syncSettings: SyncSettings;
   backupActivities?: BackupActivity[];
