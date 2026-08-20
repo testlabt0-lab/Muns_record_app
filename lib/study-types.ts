@@ -40,6 +40,14 @@ export interface SubjectTermGoal {
   nearGoalReminderNotifiedAt?: string;
 }
 
+export interface SubjectWeeklyGoal {
+  subjectId: string;
+  weekStart: string;
+  reviewTarget: number;
+  focusMinutesTarget: number;
+  updatedAt: string;
+}
+
 export interface TranscriptSegment {
   id: string;
   text: string;
@@ -211,6 +219,7 @@ export interface StudyStore {
   terms: AcademicTerm[];
   subjects: Subject[];
   subjectGoals?: SubjectTermGoal[];
+  weeklySubjectGoals?: SubjectWeeklyGoal[];
   lectures: Lecture[];
   reviewCards: ReviewCard[];
   reviewLists?: ReviewList[];
