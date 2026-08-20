@@ -9,6 +9,7 @@ import { appTheme } from "@/lib/app-theme";
 import { cancelReviewSessionReminder, scheduleReviewSessionReminder } from "@/lib/study-reminders";
 import { useStudy } from "@/lib/study-context";
 import { isReviewDue, type ReviewGrade } from "@/lib/review-scheduler";
+import { createReviewSessionEndsAt, getRemainingReviewSeconds } from "@/lib/review-session-timer";
 import type { ReviewCard } from "@/lib/study-types";
 
 export default function ReviewScreen() {
@@ -22,15 +23,18 @@ export default function ReviewScreen() {
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerNotificationId, setTimerNotificationId] = useState<string | undefined>();
   const [timerBusy, setTimerBusy] = useState(false);
+  const [timerEndsAt, setTimerEndsAt] = useState<number | undefined>();
   const due = useMemo(() => reviewCards.filter((card) => isReviewDue(card)).sort((a, b) => a.dueAt.localeCompare(b.dueAt)), [reviewCards]);
   const candidates = useMemo(() => lectures.filter((lecture) => !lecture.archivedAt).slice(0, 8), [lectures]);
   const weeklySessions = useMemo(() => (reviewSessions ?? []).filter((session) => new Date(session.completedAt).getTime() >= Date.now() - 7 * 24 * 60 * 60 * 1000), [reviewSessions]);
   useEffect(() => {
-    if (!timerRunning || sessionSeconds <= 0) return;
-    const interval = setInterval(() => setSessionSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    if (!timerRunning || !timerEndsAt) return;
+    const updateRemaining = () => setSessionSeconds(getRemainingReviewSeconds(timerEndsAt));
+    updateRemaining();
+    const interval = setInterval(updateRemaining, 1000);
     return () => clearInterval(interval);
-  }, [sessionSeconds, timerRunning]);
-  useEffect(() => { if (sessionSeconds === 0 && timerRunning) { setTimerRunning(false); void cancelReviewSessionReminder(timerNotificationId); setTimerNotificationId(undefined); addReviewSession(sessionMinutes); Alert.alert("انتهت جلسة المراجعة", "أحسنت، خذ استراحة قصيرة ثم واصل دراستك."); } }, [addReviewSession, sessionMinutes, sessionSeconds, timerNotificationId, timerRunning]);
+  }, [timerEndsAt, timerRunning]);
+  useEffect(() => { if (sessionSeconds === 0 && timerRunning) { setTimerRunning(false); setTimerEndsAt(undefined); void cancelReviewSessionReminder(timerNotificationId); setTimerNotificationId(undefined); addReviewSession(sessionMinutes); Alert.alert("انتهت جلسة المراجعة", "أحسنت، خذ استراحة قصيرة ثم واصل دراستك."); } }, [addReviewSession, sessionMinutes, sessionSeconds, timerNotificationId, timerRunning]);
   if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   const complete = (card: ReviewCard, grade: ReviewGrade) => { gradeReviewCard(card.id, grade); setRevealed(null); };
   const toggleSelected = (lectureId: string) => setSelectedLectureIds((current) => current.includes(lectureId) ? current.filter((id) => id !== lectureId) : [...current, lectureId]);
@@ -45,11 +49,12 @@ export default function ReviewScreen() {
     if (timerBusy) return;
     setTimerBusy(true);
     try {
-      if (timerRunning) { setTimerRunning(false); await cancelReviewSessionReminder(timerNotificationId); setTimerNotificationId(undefined); return; }
+      if (timerRunning) { const remaining = getRemainingReviewSeconds(timerEndsAt) || sessionSeconds; setSessionSeconds(remaining); setTimerEndsAt(undefined); setTimerRunning(false); await cancelReviewSessionReminder(timerNotificationId); setTimerNotificationId(undefined); return; }
       const seconds = sessionSeconds === 0 ? sessionMinutes * 60 : sessionSeconds;
       if (timerNotificationId) await cancelReviewSessionReminder(timerNotificationId);
       const notificationId = await scheduleReviewSessionReminder(seconds);
       setSessionSeconds(seconds);
+      setTimerEndsAt(createReviewSessionEndsAt(seconds));
       setTimerNotificationId(notificationId);
       setTimerRunning(true);
     } finally { setTimerBusy(false); }
@@ -57,13 +62,13 @@ export default function ReviewScreen() {
   const resetTimer = async () => {
     if (timerBusy) return;
     setTimerBusy(true);
-    try { await cancelReviewSessionReminder(timerNotificationId); setTimerNotificationId(undefined); setTimerRunning(false); setSessionSeconds(sessionMinutes * 60); }
+    try { await cancelReviewSessionReminder(timerNotificationId); setTimerNotificationId(undefined); setTimerEndsAt(undefined); setTimerRunning(false); setSessionSeconds(sessionMinutes * 60); }
     finally { setTimerBusy(false); }
   };
   const setTimerDuration = async (minutes: number) => {
     if (timerBusy) return;
     setTimerBusy(true);
-    try { await cancelReviewSessionReminder(timerNotificationId); setTimerNotificationId(undefined); setTimerRunning(false); setSessionMinutes(minutes); setSessionSeconds(minutes * 60); }
+    try { await cancelReviewSessionReminder(timerNotificationId); setTimerNotificationId(undefined); setTimerEndsAt(undefined); setTimerRunning(false); setSessionMinutes(minutes); setSessionSeconds(minutes * 60); }
     finally { setTimerBusy(false); }
   };
   const removeList = (id: string, title: string) => Alert.alert("حذف قائمة المراجعة", `سيُحذف تنظيم «${title}» فقط، ولن تُحذف المحاضرات أو بطاقات المراجعة.`, [{ text: "إلغاء", style: "cancel" }, { text: "حذف", style: "destructive", onPress: () => deleteReviewList(id) }]);
