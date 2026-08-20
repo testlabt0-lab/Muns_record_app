@@ -20,6 +20,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ScreenContainer } from "@/components/screen-container";
 
 type BackupUploadItem = { sourceId: string; uri: string; name: string; contentType: string; sizeBytes?: number };
+const TAG_COLORS = ["#4F46E5", "#0891B2", "#16A34A", "#D97706", "#DC2626", "#9333EA"];
 
 export default function LectureDetailScreen() {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function LectureDetailScreen() {
   const [uploadPaused, setUploadPaused] = useState(false);
   const [failedUploadItem, setFailedUploadItem] = useState<BackupUploadItem | null>(null);
   const [tagInput, setTagInput] = useState("");
+  const [tagColor, setTagColor] = useState(TAG_COLORS[0]);
   const pauseRequested = useRef(false);
 
   useEffect(() => { void setAudioModeAsync({ playsInSilentMode: true }); }, []);
@@ -158,11 +160,11 @@ export default function LectureDetailScreen() {
     const tag = tagInput.trim().replace(/\s+/g, " ").slice(0, 28);
     if (!tag) return;
     if ((lecture.tags ?? []).some((item) => item.toLocaleLowerCase("ar") === tag.toLocaleLowerCase("ar"))) { setTagInput(""); return; }
-    updateLecture(lecture.id, { tags: [...(lecture.tags ?? []), tag] });
+    updateLecture(lecture.id, { tags: [...(lecture.tags ?? []), tag], tagColors: { ...(lecture.tagColors ?? {}), [tag]: tagColor } });
     setTagInput("");
   };
 
-  const removeTag = (tag: string) => updateLecture(lecture.id, { tags: (lecture.tags ?? []).filter((item) => item !== tag) });
+  const removeTag = (tag: string) => { const tagColors = { ...(lecture.tagColors ?? {}) }; delete tagColors[tag]; updateLecture(lecture.id, { tags: (lecture.tags ?? []).filter((item) => item !== tag), tagColors }); };
 
   const addImage = async (source: "camera" | "library") => {
     try {
@@ -248,7 +250,7 @@ export default function LectureDetailScreen() {
     </View>
 
     <Pressable disabled={!lecture.transcript && !lecture.summary} onPress={exportPdf} style={({ pressed }) => [styles.exportButton, (!lecture.transcript && !lecture.summary) && styles.disabled, pressed && styles.pressed]}><MaterialIcons name="picture-as-pdf" size={20} color={appTheme.primary} /><Text style={styles.exportText}>تصدير النص والملخص PDF</Text></Pressable>
-    <View style={styles.attachmentsCard}><View style={styles.attachmentsHeader}><Text style={styles.sectionTitle}>وسوم المحاضرة</Text><StatusPill label={`${(lecture.tags ?? []).length} وسم`} tone="neutral" /></View><View style={styles.attachmentRow}><TextInput value={tagInput} onChangeText={setTagInput} onSubmitEditing={addTag} returnKeyType="done" placeholder="مثل: امتحان، مهم، مشروع" placeholderTextColor="#94A3B8" textAlign="right" style={styles.attachmentTitle} /><Pressable accessibilityLabel="إضافة وسم" onPress={addTag} style={styles.attachmentDelete}><MaterialIcons name="add" size={18} color={appTheme.primary} /></Pressable></View>{(lecture.tags ?? []).length ? <View style={styles.tags}>{(lecture.tags ?? []).map((tag) => <Pressable key={tag} onPress={() => removeTag(tag)} style={styles.tag}><Text style={styles.tagText}>{tag} ×</Text></Pressable>)}</View> : <Text style={styles.attachmentActionText}>أضف وسوماً قصيرة لتسهيل العثور على المحاضرة لاحقاً.</Text>}</View>
+    <View style={styles.attachmentsCard}><View style={styles.attachmentsHeader}><Text style={styles.sectionTitle}>وسوم المحاضرة</Text><StatusPill label={`${(lecture.tags ?? []).length} وسم`} tone="neutral" /></View><View style={styles.tags}>{TAG_COLORS.map((color) => <Pressable key={color} onPress={() => setTagColor(color)} style={[styles.tag, { backgroundColor: color, opacity: tagColor === color ? 1 : 0.35 }]}><Text style={[styles.tagText, { color: "#FFFFFF" }]}>{tagColor === color ? "✓" : "●"}</Text></Pressable>)}</View><View style={styles.attachmentRow}><TextInput value={tagInput} onChangeText={setTagInput} onSubmitEditing={addTag} returnKeyType="done" placeholder="مثل: امتحان، مهم، مشروع" placeholderTextColor="#94A3B8" textAlign="right" style={styles.attachmentTitle} /><Pressable accessibilityLabel="إضافة وسم" onPress={addTag} style={styles.attachmentDelete}><MaterialIcons name="add" size={18} color={tagColor} /></Pressable></View>{(lecture.tags ?? []).length ? <View style={styles.tags}>{(lecture.tags ?? []).map((tag) => { const color = lecture.tagColors?.[tag] ?? appTheme.primary; return <Pressable key={tag} onPress={() => removeTag(tag)} style={[styles.tag, { backgroundColor: `${color}20` }]}><Text style={[styles.tagText, { color }]}>{tag} ×</Text></Pressable>; })}</View> : <Text style={styles.attachmentActionText}>اختر لوناً ثم أضف وسوماً قصيرة لتسهيل العثور على المحاضرة لاحقاً.</Text>}</View>
 
     <View style={styles.attachmentsCard}><View style={styles.attachmentsHeader}><Text style={styles.sectionTitle}>مرفقات المحاضرة</Text><StatusPill label={`${(lecture.attachments ?? []).length} مرفق`} tone="neutral" /></View><View style={styles.attachmentActions}><Pressable onPress={() => void addImage("camera")} style={styles.attachmentAction}><MaterialIcons name="photo-camera" size={18} color={appTheme.primary} /><Text style={styles.attachmentActionText}>التقاط سبورة</Text></Pressable><Pressable onPress={() => void addImage("library")} style={styles.attachmentAction}><MaterialIcons name="image" size={18} color={appTheme.primary} /><Text style={styles.attachmentActionText}>إضافة صورة</Text></Pressable><Pressable onPress={() => void addDocument()} style={styles.attachmentAction}><MaterialIcons name="attach-file" size={18} color={appTheme.primary} /><Text style={styles.attachmentActionText}>PDF أو ملف</Text></Pressable></View>{(lecture.attachments ?? []).map((attachment) => <View key={attachment.id} style={styles.attachmentRow}><Pressable onPress={() => void Linking.openURL(attachment.uri)} style={styles.attachmentOpen}><MaterialIcons name={attachment.kind === "image" ? "image" : "description"} size={19} color={appTheme.primary} /><Text style={styles.attachmentTitle} numberOfLines={1}>{attachment.title}</Text></Pressable><Pressable accessibilityLabel="إزالة المرفق" onPress={() => deleteAttachment(attachment.id, attachment.title)} style={styles.attachmentDelete}><MaterialIcons name="close" size={17} color={appTheme.danger} /></Pressable></View>)}</View>
     <Pressable disabled={encryptedUpload.isPending || uploadPaused} onPress={() => void backupMediaEncrypted()} style={({ pressed }) => [styles.encryptedBackup, (encryptedUpload.isPending || uploadPaused) && styles.disabled, pressed && styles.pressed]}><MaterialIcons name="lock" size={19} color={appTheme.success} /><Text style={styles.encryptedBackupText}>{uploadProgress ? `رفع ${uploadProgress.current}/${uploadProgress.total}: ${uploadProgress.fileName}` : encryptedUpload.isPending ? "يجري التشفير والحفظ" : "إنشاء نسخة مشفرة للملفات"}</Text></Pressable>

@@ -66,6 +66,7 @@ export interface Lecture {
   recordedAt: string;
   archivedAt?: string;
   tags?: string[];
+  tagColors?: Record<string, string>;
   durationSeconds: number;
   audioUri?: string;
   audioSizeBytes?: number;
