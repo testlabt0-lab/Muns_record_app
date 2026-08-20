@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { Directory, File, Paths } from "expo-file-system";
@@ -34,7 +34,7 @@ export default function RecordScreen() {
     const term = getTerm(selectedSubject.termId);
     const year = term ? getYear(term.yearId) : undefined;
     return `${year?.title ?? "سنة"} · ${term?.title ?? "ترم"} · ${selectedSubject.title}`;
-  }, [getSubject, getTerm, getYear, selectedSubject]);
+  }, [getTerm, getYear, selectedSubject]);
 
   useEffect(() => {
     if (!recorderState.isRecording) return;
@@ -43,12 +43,6 @@ export default function RecordScreen() {
     }, 1000);
     return () => clearInterval(timer);
   }, [recorderState.isRecording]);
-
-  useEffect(() => {
-    if (!recorderState.isRecording || elapsedSeconds < autoPartDurationSeconds || isSwitchingPart.current) return;
-    isSwitchingPart.current = true;
-    void nextPart().finally(() => { isSwitchingPart.current = false; });
-  }, [autoPartDurationSeconds, elapsedSeconds, recorderState.isRecording]);
 
   useEffect(() => {
     if (!selectedSubject?.hasPracticalSection && selectedSection === "practical") setSelectedSection("theory");
@@ -67,7 +61,7 @@ export default function RecordScreen() {
     } catch { Alert.alert("تعذر بدء التسجيل", "تحقق من إذن الميكروفون ثم حاول مجدداً."); }
   };
 
-  const finishCurrentPart = async () => {
+  const finishCurrentPart = useCallback(async () => {
     try {
       await recorder.stop();
       const uri = recorder.uri;
@@ -81,7 +75,7 @@ export default function RecordScreen() {
       startedAt.current = null;
       return part;
     } catch { Alert.alert("تعذر حفظ التسجيل", "حاول تسجيل هذا الجزء مرة أخرى."); return null; }
-  };
+  }, [audioParts.length, recorder]);
 
   const stopRecording = async () => {
     const part = await finishCurrentPart();
@@ -90,7 +84,7 @@ export default function RecordScreen() {
     setTitle(`محاضرة ${new Date().toLocaleDateString("ar", { month: "long", day: "numeric" })}`);
   };
 
-  const nextPart = async () => {
+  const nextPart = useCallback(async () => {
     const part = await finishCurrentPart();
     if (!part) return;
     try {
@@ -98,7 +92,13 @@ export default function RecordScreen() {
       recorder.record();
       startedAt.current = Date.now();
     } catch { Alert.alert("حُفظ الجزء", "تعذر بدء الجزء التالي. يمكنك إنهاء المحاضرة وحفظ الأجزاء المسجلة."); setFinalized(true); }
-  };
+  }, [finishCurrentPart, recorder]);
+
+  useEffect(() => {
+    if (!recorderState.isRecording || elapsedSeconds < autoPartDurationSeconds || isSwitchingPart.current) return;
+    isSwitchingPart.current = true;
+    void nextPart().finally(() => { isSwitchingPart.current = false; });
+  }, [autoPartDurationSeconds, elapsedSeconds, nextPart, recorderState.isRecording]);
 
   const saveRecording = () => {
     if (!selectedSubject || !audioParts.length) return;

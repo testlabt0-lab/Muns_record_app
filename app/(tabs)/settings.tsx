@@ -112,7 +112,7 @@ export default function SettingsScreen() {
     Alert.alert("تأكيد سياسة الاحتفاظ", `سيُزال الوصول إلى ${expired.length} نسخة مشفرة أقدم من ${retentionDays} يوماً. لا يمكن التراجع عن هذا الإجراء.`, [{ text: "إلغاء", style: "cancel" }, { text: "حذف النسخ القديمة", style: "destructive", onPress: () => void runExpiredMediaRemoval(expired) }]);
   };
 
-  const runExpiredMediaRemoval = async (files: Array<{ id: number; fileName: string }>) => {
+  const runExpiredMediaRemoval = async (files: { id: number; fileName: string }[]) => {
     const failed: string[] = [];
     for (const file of files) { try { await deleteEncryptedMedia.mutateAsync({ id: file.id }); } catch { failed.push(file.fileName); } }
     setSelectedMediaIds((current) => current.filter((id) => !files.some((file) => file.id === id)));
@@ -182,7 +182,7 @@ function SettingRow({ icon, title, detail, status }: { icon: React.ComponentProp
   return <View style={styles.row}><View style={styles.rowIcon}><MaterialIcons name={icon} size={21} color={appTheme.primary} /></View><View style={styles.rowText}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowDetail}>{detail}</Text></View><StatusPill label={status} tone="neutral" /></View>;
 }
 
-function MediaRestorePicker({ visible, files, selectedIds, busy, onClose, onToggle, onToggleAll, onDelete, onRestore }: { visible: boolean; files: Array<{ id: number; fileName: string; contentType: string; originalSize: number; createdAt: Date | string }>; selectedIds: number[]; busy: boolean; onClose: () => void; onToggle: (id: number) => void; onToggleAll: () => void; onDelete: (id: number, fileName: string) => void; onRestore: () => void }) {
+function MediaRestorePicker({ visible, files, selectedIds, busy, onClose, onToggle, onToggleAll, onDelete, onRestore }: { visible: boolean; files: { id: number; fileName: string; contentType: string; originalSize: number; createdAt: Date | string }[]; selectedIds: number[]; busy: boolean; onClose: () => void; onToggle: (id: number) => void; onToggleAll: () => void; onDelete: (id: number, fileName: string) => void; onRestore: () => void }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"recent" | "largest">("recent");
   const normalizedQuery = query.trim().toLowerCase();
