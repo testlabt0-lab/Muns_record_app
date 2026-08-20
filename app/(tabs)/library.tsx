@@ -18,7 +18,7 @@ export default function LibraryScreen() {
   const normalizedQuery = query.trim().toLocaleLowerCase("ar");
   const results = useMemo(() => lectures.filter((lecture) => {
     const subject = getSubject(lecture.subjectId);
-    const searchText = [lecture.title, lecture.transcript, lecture.summary?.overview, ...(lecture.summary?.keyPoints ?? []), ...(lecture.summary?.terms ?? []), ...(lecture.summary?.reviewQuestions ?? []), subject?.title, subject?.theoryInstructor, subject?.practicalInstructor, ...(lecture.attachments ?? []).map((attachment) => attachment.title)].filter(Boolean).join(" ").toLocaleLowerCase("ar");
+    const searchText = [lecture.title, lecture.transcript, lecture.summary?.overview, ...(lecture.summary?.keyPoints ?? []), ...(lecture.summary?.terms ?? []), ...(lecture.summary?.reviewQuestions ?? []), ...(lecture.tags ?? []), subject?.title, subject?.theoryInstructor, subject?.practicalInstructor, ...(lecture.attachments ?? []).map((attachment) => attachment.title)].filter(Boolean).join(" ").toLocaleLowerCase("ar");
     const matchesFilter = filter === "all" || (filter === "transcribed" ? Boolean(lecture.transcript) : Boolean(lecture.summary));
     return Boolean(lecture.archivedAt) === showArchived && matchesFilter && (!normalizedQuery || searchText.includes(normalizedQuery));
   }).sort((a, b) => sortBy === "size" ? lectureSize(b) - lectureSize(a) : new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()), [filter, getSubject, lectures, normalizedQuery, showArchived, sortBy]);
