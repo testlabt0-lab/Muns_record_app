@@ -134,7 +134,15 @@ export interface ReviewList {
 export interface ReviewSession {
   id: string;
   durationMinutes: number;
+  subjectId?: string;
   completedAt: string;
+}
+
+export interface SubjectReviewChallenge {
+  id: string;
+  subjectId: string;
+  targetCards: number;
+  createdAt: string;
 }
 
 export interface StudyTask {
@@ -160,6 +168,13 @@ export interface SyncSettings {
   weeklyReviewGoal?: number;
   weeklyGoalNotificationEnabled?: boolean;
   weeklyGoalNotificationWeekKey?: string;
+  dailyFocusGoalMinutes?: number;
+  dailyFocusReminderEnabled?: boolean;
+  dailyFocusReminderNotificationId?: string;
+  weeklyReviewDays?: number[];
+  weeklyReviewReminderEnabled?: boolean;
+  weeklyReviewReminderNotificationIds?: string[];
+  appearanceMode?: "light" | "dark";
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
 }
@@ -181,6 +196,7 @@ export interface StudyStore {
   reviewCards: ReviewCard[];
   reviewLists?: ReviewList[];
   reviewSessions?: ReviewSession[];
+  reviewChallenges?: SubjectReviewChallenge[];
   tasks: StudyTask[];
   syncSettings: SyncSettings;
   backupActivities?: BackupActivity[];
