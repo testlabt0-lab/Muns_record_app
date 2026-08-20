@@ -88,3 +88,21 @@ export async function scheduleWeeklyDigestReminder() {
 export async function cancelWeeklyDigestReminder(notificationId?: string) {
   if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
 }
+
+export async function scheduleDailyFocusReminder() {
+  if (Platform.OS === "web") return undefined;
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("study-focus", { name: "تحدي التركيز", importance: Notifications.AndroidImportance.DEFAULT });
+  }
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return undefined;
+  return Notifications.scheduleNotificationAsync({
+    content: { title: "تحدي التركيز اليومي", body: "خصص دقائق قليلة لمراجعة محاضراتك اليوم.", data: { url: "/review" } },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: 19, minute: 0, channelId: "study-focus" },
+  });
+}
+
+export async function cancelDailyFocusReminder(notificationId?: string) {
+  if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
+}

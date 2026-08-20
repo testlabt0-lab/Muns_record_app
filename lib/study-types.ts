@@ -169,6 +169,9 @@ export interface SyncSettings {
   weeklyGoalNotificationEnabled?: boolean;
   weeklyGoalNotificationWeekKey?: string;
   dailyFocusGoalMinutes?: number;
+  dailyFocusReminderEnabled?: boolean;
+  dailyFocusReminderNotificationId?: string;
+  weeklyReviewDays?: number[];
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
 }
