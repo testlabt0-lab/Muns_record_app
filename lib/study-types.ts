@@ -134,6 +134,7 @@ export interface ReviewList {
 export interface ReviewSession {
   id: string;
   durationMinutes: number;
+  subjectId?: string;
   completedAt: string;
 }
 
@@ -167,6 +168,7 @@ export interface SyncSettings {
   weeklyReviewGoal?: number;
   weeklyGoalNotificationEnabled?: boolean;
   weeklyGoalNotificationWeekKey?: string;
+  dailyFocusGoalMinutes?: number;
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
 }
