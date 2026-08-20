@@ -108,7 +108,7 @@ export async function cancelDailyFocusReminder(notificationId?: string) {
   if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
 }
 
-export async function scheduleWeeklyReviewPlanReminders(days: number[]) {
+export async function scheduleWeeklyReviewPlanReminders(days: number[], hour = 18) {
   const reviewDays = normalizeWeeklyReviewDays(days);
   if (Platform.OS === "web" || !reviewDays.length) return undefined;
   if (Platform.OS === "android") {
@@ -119,7 +119,7 @@ export async function scheduleWeeklyReviewPlanReminders(days: number[]) {
   if (permission.status !== "granted") return undefined;
   return Promise.all(reviewDays.map((day) => Notifications.scheduleNotificationAsync({
     content: { title: "موعد المراجعة", body: "اليوم ضمن خطة المراجعة الأسبوعية. افتح مُحاضِر وابدأ جلسة قصيرة.", data: { url: "/review" } },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: day + 1, hour: 18, minute: 0, channelId: "study-review-plan" },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: day + 1, hour, minute: 0, channelId: "study-review-plan" },
   })));
 }
 

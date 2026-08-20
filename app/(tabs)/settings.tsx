@@ -7,6 +7,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 import { AppHeader, PrimaryButton, StatusPill } from "@/components/study-ui";
+import { StudyDataImportModal } from "@/components/study-data-import-modal";
 import { startOAuthLogin } from "@/constants/oauth";
 import { useAuth } from "@/hooks/use-auth";
 import { appTheme } from "@/lib/app-theme";
@@ -227,7 +228,7 @@ export default function SettingsScreen() {
         <View style={styles.footer}><Text style={styles.footerTitle}>مُحاضِر</Text><Text style={styles.footerText}>دفتر دراسي صوتي يساعدك على حفظ المحاضرة وفهمها ومراجعتها.</Text></View>
       </ScrollView>
       <MediaRestorePicker visible={showMediaPicker} files={encryptedMedia.data ?? []} selectedIds={selectedMediaIds} busy={restoreEncryptedMedia.isPending || deleteEncryptedMedia.isPending} onClose={() => setShowMediaPicker(false)} onToggle={toggleMedia} onToggleAll={toggleAllMedia} onDelete={removeMediaFile} onRestore={() => { setShowMediaPicker(false); void runMediaRestore(selectedMediaIds); }} />
-      <StudyDataImportPicker visible={Boolean(pendingImport)} fileName={pendingImportFileName} payload={pendingImport} selected={importSelection} busy={importingStudyData} onClose={() => setPendingImport(null)} onToggle={toggleImportSection} onApply={applyStudyDataImport} />
+      <StudyDataImportModal visible={Boolean(pendingImport)} fileName={pendingImportFileName} payload={pendingImport} current={{ years, terms, subjects, lectures, reviewCards, reviewLists, reviewSessions, reviewChallenges, tasks, syncSettings, backupActivities }} selected={importSelection} busy={importingStudyData} onClose={() => setPendingImport(null)} onToggle={toggleImportSection} onApply={applyStudyDataImport} />
     </ScreenContainer>
   );
 }

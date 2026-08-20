@@ -8,6 +8,9 @@ export type StudyDataImportPayload = {
   reviewLists: NonNullable<StudyStore["reviewLists"]>; reviewSessions: NonNullable<StudyStore["reviewSessions"]>; reviewChallenges: NonNullable<StudyStore["reviewChallenges"]>;
 };
 
+export interface StudyDataImportPreview { incoming: number; additions: number; duplicates: number; blocked: number; }
+export type StudyDataImportPreviewBySection = Record<StudyDataImportSection, StudyDataImportPreview>;
+
 function asArray<T>(value: unknown): T[] { return Array.isArray(value) ? value as T[] : []; }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
 function uniqueById<T extends { id: string }>(current: T[], incoming: T[]) { const known = new Set(current.map((item) => item.id)); return [...current, ...incoming.filter((item) => item && typeof item.id === "string" && !known.has(item.id))]; }
@@ -41,4 +44,32 @@ export function mergeStudyDataImport(current: StudyStore, incoming: StudyDataImp
   const reviewChallenges = choose("review") ? uniqueById(current.reviewChallenges ?? [], incoming.reviewChallenges.filter((challenge) => subjectIds.has(challenge.subjectId))) : (current.reviewChallenges ?? []);
   const tasks = choose("tasks") ? uniqueById(current.tasks, incoming.tasks.map((task) => task.subjectId && !subjectIds.has(task.subjectId) ? { ...task, subjectId: undefined, notificationId: undefined, calendarEventId: undefined } : { ...task, notificationId: undefined, calendarEventId: undefined })) : current.tasks;
   return { ...current, years, terms, subjects, lectures, reviewCards, reviewLists, reviewSessions, reviewChallenges, tasks };
+}
+
+/** يعرض أثراً واضحاً للدمج؛ لا يغير المحتوى ولا يعدّل المعرّفات المتكررة. */
+export function getStudyDataImportPreview(current: StudyStore, incoming: StudyDataImportPayload, selected: StudyDataImportSection[]): StudyDataImportPreviewBySection {
+  const choose = (section: StudyDataImportSection) => selected.includes(section);
+  const preview = (): StudyDataImportPreview => ({ incoming: 0, additions: 0, duplicates: 0, blocked: 0 });
+  const structure = preview(); const lectures = preview(); const review = preview(); const tasks = preview();
+  const count = <T extends { id: string }>(items: T[], existingIds: Set<string>, allowed: (item: T) => boolean, target: StudyDataImportPreview) => items.forEach((item) => { target.incoming += 1; if (existingIds.has(item.id)) target.duplicates += 1; else if (!allowed(item)) target.blocked += 1; else target.additions += 1; });
+  const yearIds = new Set(current.years.map((item) => item.id));
+  if (choose("structure")) count(incoming.years, yearIds, () => true, structure);
+  const mergedYearIds = new Set([...yearIds, ...(choose("structure") ? incoming.years.map((item) => item.id) : [])]);
+  const termIds = new Set(current.terms.map((item) => item.id));
+  if (choose("structure")) count(incoming.terms, termIds, (item) => mergedYearIds.has(item.yearId), structure);
+  const mergedTermIds = new Set([...termIds, ...(choose("structure") ? incoming.terms.filter((item) => mergedYearIds.has(item.yearId)).map((item) => item.id) : [])]);
+  const subjectIds = new Set(current.subjects.map((item) => item.id));
+  if (choose("structure")) count(incoming.subjects, subjectIds, (item) => mergedTermIds.has(item.termId), structure);
+  const mergedSubjectIds = new Set([...subjectIds, ...(choose("structure") ? incoming.subjects.filter((item) => mergedTermIds.has(item.termId)).map((item) => item.id) : [])]);
+  const lectureIds = new Set(current.lectures.map((item) => item.id));
+  if (choose("lectures")) count(incoming.lectures, lectureIds, (item) => mergedSubjectIds.has(item.subjectId), lectures);
+  const mergedLectureIds = new Set([...lectureIds, ...(choose("lectures") ? incoming.lectures.filter((item) => mergedSubjectIds.has(item.subjectId)).map((item) => item.id) : [])]);
+  if (choose("review")) {
+    count(incoming.reviewCards, new Set(current.reviewCards.map((item) => item.id)), (item) => mergedLectureIds.has(item.lectureId), review);
+    count(incoming.reviewLists, new Set((current.reviewLists ?? []).map((item) => item.id)), (item) => item.lectureIds.some((id) => mergedLectureIds.has(id)), review);
+    count(incoming.reviewSessions, new Set((current.reviewSessions ?? []).map((item) => item.id)), () => true, review);
+    count(incoming.reviewChallenges, new Set((current.reviewChallenges ?? []).map((item) => item.id)), (item) => mergedSubjectIds.has(item.subjectId), review);
+  }
+  if (choose("tasks")) count(incoming.tasks, new Set(current.tasks.map((item) => item.id)), () => true, tasks);
+  return { structure, lectures, review, tasks };
 }
