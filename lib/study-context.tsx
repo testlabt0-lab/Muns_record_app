@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { createActiveAcademicYear, deactivateAcademicYears, findOrCreateTerm, normalizeRequiredTitle } from "@/lib/study-domain";
+import { scheduleReview, type ReviewGrade } from "@/lib/review-scheduler";
 import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
 
 const STORE_KEY = "muhadir.study-store.v1";
@@ -26,6 +27,7 @@ type StudyContextValue = StudyStore & {
   removeAttachment: (lectureId: string, attachmentId: string) => void;
   addReviewCards: (lectureId: string, cards: Array<Pick<ReviewCard, "question" | "answer">>) => void;
   reviewCard: (cardId: string, correct: boolean) => void;
+  gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;
   addTask: (task: Omit<StudyTask, "id" | "createdAt" | "completed">) => string;
   updateTask: (taskId: string, changes: Partial<Pick<StudyTask, "title" | "dueAt" | "completed" | "notificationId" | "calendarEventId">>) => void;
   updateSyncSettings: (changes: Partial<StudyStore["syncSettings"]>) => void;
@@ -99,9 +101,9 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       addReviewCards: (lectureId, cards) => setStore((current) => ({ ...current, reviewCards: [...current.reviewCards, ...cards.map((card) => ({ ...card, id: makeId("review"), lectureId, dueAt: new Date().toISOString(), intervalDays: 1, repetitions: 0 }))] })),
       reviewCard: (cardId, correct) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => {
         if (card.id !== cardId) return card;
-        const intervalDays = correct ? Math.min(30, Math.max(1, card.intervalDays * 2)) : 1;
-        return { ...card, intervalDays, dueAt: new Date(Date.now() + intervalDays * 86_400_000).toISOString(), repetitions: correct ? card.repetitions + 1 : 0, lastReviewedAt: new Date().toISOString() };
+        return { ...card, ...scheduleReview(card, correct ? "good" : "again") };
       }) })),
+      gradeReviewCard: (cardId, grade) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => card.id === cardId ? { ...card, ...scheduleReview(card, grade) } : card) })),
       addTask: (task) => { const id = makeId("task"); setStore((current) => ({ ...current, tasks: [...current.tasks, { ...task, id, completed: false, createdAt: new Date().toISOString() }] })); return id; },
       updateTask: (taskId, changes) => setStore((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, ...changes } : task) })),
       updateSyncSettings: (changes) => setStore((current) => ({ ...current, syncSettings: { ...current.syncSettings, ...changes } })),
