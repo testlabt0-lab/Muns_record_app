@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSupportedAudioMimeType, titleFromImportedAudioFile } from "../lib/import-recording";
+import { isSupportedAudioFile, isSupportedAudioMimeType, titleFromImportedAudioFile } from "../lib/import-recording";
 
 describe("استيراد التسجيلات السابقة", () => {
   it("ينشئ عنواناً مقروءاً من اسم الملف", () => {
@@ -11,5 +11,7 @@ describe("استيراد التسجيلات السابقة", () => {
     expect(isSupportedAudioMimeType("audio/mpeg")).toBe(true);
     expect(isSupportedAudioMimeType("application/pdf")).toBe(false);
     expect(isSupportedAudioMimeType(undefined)).toBe(false);
+    expect(isSupportedAudioFile(undefined, "محاضرة 2.m4a")).toBe(true);
+    expect(isSupportedAudioFile(undefined, "notes.pdf")).toBe(false);
   });
 });

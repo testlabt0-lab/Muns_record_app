@@ -8,7 +8,7 @@ import * as DocumentPicker from "expo-document-picker";
 
 import { AppHeader, EmptyState, IconButton, PrimaryButton, StatusPill } from "@/components/study-ui";
 import { appTheme } from "@/lib/app-theme";
-import { isSupportedAudioMimeType, titleFromImportedAudioFile } from "@/lib/import-recording";
+import { isSupportedAudioFile, titleFromImportedAudioFile } from "@/lib/import-recording";
 import { useStudy } from "@/lib/study-context";
 import type { LectureAudioPart, SubjectSection } from "@/lib/study-types";
 import { ScreenContainer } from "@/components/screen-container";
@@ -108,7 +108,7 @@ export default function RecordScreen() {
       const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: false });
       if (result.canceled) return;
       const asset = result.assets[0];
-      if (!isSupportedAudioMimeType(asset.mimeType)) { Alert.alert("ملف غير مدعوم", "اختر ملفاً صوتياً صالحاً مثل M4A أو MP3 أو WAV."); return; }
+      if (!isSupportedAudioFile(asset.mimeType, asset.name)) { Alert.alert("ملف غير مدعوم", "اختر ملفاً صوتياً صالحاً مثل M4A أو MP3 أو WAV."); return; }
       const persistedUri = await persistRecording(asset.uri);
       const sizeBytes = new File(persistedUri).size ?? asset.size ?? 0;
       const part: LectureAudioPart = { id: `imported-${Date.now()}`, index: 1, uri: persistedUri, durationSeconds: 0, sizeBytes, createdAt: new Date().toISOString() };
