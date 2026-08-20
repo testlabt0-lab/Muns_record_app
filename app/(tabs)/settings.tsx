@@ -11,7 +11,7 @@ import { createBackupPayload, parseBackupPayload } from "@/lib/backup-payload";
 import { formatBytes } from "@/lib/lecture-export-template";
 import { attachmentKindFromMime, persistBase64Attachment } from "@/lib/local-attachments";
 import { useStudy } from "@/lib/study-context";
-import { notifyBackupOutcome } from "@/lib/study-reminders";
+import { cancelWeeklyDigestReminder, notifyBackupOutcome, scheduleWeeklyDigestReminder } from "@/lib/study-reminders";
 import { trpc } from "@/lib/trpc";
 import { ScreenContainer } from "@/components/screen-container";
 
@@ -26,6 +26,7 @@ export default function SettingsScreen() {
   const [activityStatusFilter, setActivityStatusFilter] = useState<"all" | "completed" | "failed">("all");
   const [activityTypeFilter, setActivityTypeFilter] = useState<"all" | "backup" | "restore" | "media">("all");
   const [retentionDays, setRetentionDays] = useState<30 | 90 | 180>(90);
+  const [weeklyDigestBusy, setWeeklyDigestBusy] = useState(false);
   const saveBackup = trpc.studySync.save.useMutation();
   const loadBackup = trpc.studySync.load.useQuery(undefined, { enabled: false });
   const encryptedMedia = trpc.encryptedMedia.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -125,6 +126,24 @@ export default function SettingsScreen() {
     Alert.alert("تم حفظ الحد", `سيبدأ جزء صوتي جديد تلقائياً كل ${value} دقيقة.`);
   };
 
+  const toggleWeeklyDigest = async () => {
+    if (weeklyDigestBusy) return;
+    setWeeklyDigestBusy(true);
+    try {
+      if (syncSettings.weeklyDigestEnabled) {
+        await cancelWeeklyDigestReminder(syncSettings.weeklyDigestNotificationId);
+        updateSyncSettings({ weeklyDigestEnabled: false, weeklyDigestNotificationId: undefined });
+        Alert.alert("تم إيقاف الملخص الأسبوعي", "لن يُرسل التطبيق تذكيراً أسبوعياً بعد الآن.");
+      } else {
+        const notificationId = await scheduleWeeklyDigestReminder();
+        if (!notificationId) { Alert.alert("لم يمنح الإذن", "اسمح للتطبيق بإرسال التنبيهات لتفعيل الملخص الأسبوعي."); return; }
+        updateSyncSettings({ weeklyDigestEnabled: true, weeklyDigestNotificationId: notificationId });
+        Alert.alert("تم تفعيل الملخص الأسبوعي", "سيصلك تذكير محلي كل أحد مساءً لفتح ملخص المحاضرات والتخزين.");
+      }
+    } catch { Alert.alert("تعذر تحديث التذكير", "حاول مرة أخرى من جهاز الهاتف."); }
+    finally { setWeeklyDigestBusy(false); }
+  };
+
   return (
     <ScreenContainer className="px-5">
       <AppHeader eyebrow="التحكم والخصوصية" title="الإعدادات" />
@@ -134,6 +153,7 @@ export default function SettingsScreen() {
         <View style={styles.limitCard}><View style={styles.limitHeading}><MaterialIcons name="call-split" size={21} color={appTheme.primary} /><View style={styles.rowText}><Text style={styles.rowTitle}>حد تقسيم التسجيل</Text><Text style={styles.rowDetail}>ينشئ التطبيق جزءاً صوتياً جديداً تلقائياً قبل أن يصبح الملف طويلاً.</Text></View></View><View style={styles.limitControls}><TextInput value={partMinutes} onChangeText={setPartMinutes} keyboardType="number-pad" maxLength={2} textAlign="center" style={styles.limitInput} /><Text style={styles.limitUnit}>دقيقة</Text><Pressable onPress={saveRecordingLimit} style={styles.limitSave}><Text style={styles.limitSaveText}>حفظ</Text></Pressable></View></View>
         <View style={styles.backupCard}><View style={styles.backupHeading}><StatusPill label={syncSettings.cloudBackupEnabled ? "اختياري ومفعّل" : "غير مفعّل"} tone={syncSettings.cloudBackupEnabled ? "success" : "neutral"} /><View style={styles.rowText}><Text style={styles.rowTitle}>نسخ احتياطي اختياري</Text><Text style={styles.rowDetail}>{isAuthenticated ? `مرتبط بـ ${user?.name ?? "حسابك"}` : "لا يتم رفع بيانات قبل تسجيل الدخول وموافقتك."}</Text></View><MaterialIcons name="cloud-upload" size={23} color={appTheme.primary} /></View><View style={styles.backupActions}><Pressable onPress={() => void restoreBackup()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>استعادة البيانات</Text></Pressable><View style={styles.backupMain}><PrimaryButton label={saveBackup.isPending ? "يجري النسخ" : "إنشاء نسخة احتياطية"} icon="backup" disabled={saveBackup.isPending} onPress={createBackup} /></View></View><Pressable disabled={restoreEncryptedMedia.isPending} onPress={restoreMediaFiles} style={[styles.restoreMediaButton, restoreEncryptedMedia.isPending && styles.disabled]}><MaterialIcons name="lock-open" size={18} color={appTheme.success} /><Text style={styles.restoreMediaText}>{restoreProgress ? `استعادة ${restoreProgress.current}/${restoreProgress.total}: ${restoreProgress.fileName}` : `اختيار واستعادة الملفات المشفرة${isAuthenticated ? ` (${(encryptedMedia.data ?? []).length})` : ""}`}</Text></Pressable>{syncSettings.lastBackupAt ? <Text style={styles.backupMeta}>آخر نسخة: {new Date(syncSettings.lastBackupAt).toLocaleString("ar")}</Text> : null}<View style={styles.activityFilters}><Pressable onPress={() => setActivityStatusFilter("all")} style={[styles.activityChip, activityStatusFilter === "all" && styles.activityChipActive]}><Text style={[styles.activityChipText, activityStatusFilter === "all" && styles.activityChipTextActive]}>الكل</Text></Pressable><Pressable onPress={() => setActivityStatusFilter("completed")} style={[styles.activityChip, activityStatusFilter === "completed" && styles.activityChipActive]}><Text style={[styles.activityChipText, activityStatusFilter === "completed" && styles.activityChipTextActive]}>ناجح</Text></Pressable><Pressable onPress={() => setActivityStatusFilter("failed")} style={[styles.activityChip, activityStatusFilter === "failed" && styles.activityChipActive]}><Text style={[styles.activityChipText, activityStatusFilter === "failed" && styles.activityChipTextActive]}>فاشل</Text></Pressable><Pressable onPress={() => setActivityTypeFilter(activityTypeFilter === "media" ? "all" : "media")} style={[styles.activityChip, activityTypeFilter === "media" && styles.activityChipActive]}><Text style={[styles.activityChipText, activityTypeFilter === "media" && styles.activityChipTextActive]}>ملفات</Text></Pressable></View>{visibleActivities.slice(0, 6).map((activity) => <View key={activity.id} style={styles.activityRow}><MaterialIcons name={activity.status === "completed" ? "check-circle" : "error-outline"} size={16} color={activity.status === "completed" ? appTheme.success : appTheme.danger} /><View style={styles.rowText}><Text style={styles.activityText}>{activity.message}</Text><Text style={styles.activityTime}>{new Date(activity.createdAt).toLocaleString("ar")}</Text></View></View>)}</View>
         <View style={styles.limitCard}><View style={styles.limitHeading}><MaterialIcons name="history" size={21} color={appTheme.warning} /><View style={styles.rowText}><Text style={styles.rowTitle}>سياسة الاحتفاظ بالنسخ المشفرة</Text><Text style={styles.rowDetail}>احذف يدوياً النسخ الأقدم بعد تأكيدك. لا تُنفذ العملية تلقائياً.</Text></View></View><View style={styles.sortRow}>{([30, 90, 180] as const).map((days) => <Pressable key={days} onPress={() => setRetentionDays(days)} style={[styles.sortChip, retentionDays === days && styles.sortChipActive]}><Text style={[styles.sortChipText, retentionDays === days && styles.sortChipTextActive]}>{days} يوماً</Text></Pressable>)}</View><Pressable disabled={!isAuthenticated || deleteEncryptedMedia.isPending} onPress={removeExpiredMedia} style={[styles.restoreMediaButton, (!isAuthenticated || deleteEncryptedMedia.isPending) && styles.disabled]}><MaterialIcons name="delete-sweep" size={18} color={appTheme.success} /><Text style={styles.restoreMediaText}>مراجعة وحذف النسخ الأقدم من {retentionDays} يوماً</Text></Pressable></View>
+        <View style={styles.limitCard}><View style={styles.limitHeading}><MaterialIcons name="event-note" size={21} color={appTheme.violet} /><View style={styles.rowText}><Text style={styles.rowTitle}>ملخص أسبوعي اختياري</Text><Text style={styles.rowDetail}>تذكير محلي كل أحد مساءً لفتح ملخص المحاضرات الجديدة ومساحة التخزين. لا يُرفع أي محتوى.</Text></View><StatusPill label={syncSettings.weeklyDigestEnabled ? "مفعّل" : "غير مفعّل"} tone={syncSettings.weeklyDigestEnabled ? "success" : "neutral"} /></View><Pressable disabled={weeklyDigestBusy} onPress={() => void toggleWeeklyDigest()} style={[styles.restoreMediaButton, weeklyDigestBusy && styles.disabled]}><MaterialIcons name={syncSettings.weeklyDigestEnabled ? "notifications-off" : "notifications-active"} size={18} color={appTheme.success} /><Text style={styles.restoreMediaText}>{weeklyDigestBusy ? "يجري التحديث" : syncSettings.weeklyDigestEnabled ? "إيقاف الملخص الأسبوعي" : "تفعيل الملخص الأسبوعي"}</Text></Pressable></View>
         <SettingRow icon="auto-awesome" title="المعالجة الذكية" detail="تحويل صوت إلى نص وتلخيص منظم عند الطلب." status="عند الطلب" />
         <SettingRow icon="language" title="لغة الواجهة" detail="العربية واتجاه القراءة من اليمين إلى اليسار." status="العربية" />
         <View style={styles.footer}><Text style={styles.footerTitle}>مُحاضِر</Text><Text style={styles.footerText}>دفتر دراسي صوتي يساعدك على حفظ المحاضرة وفهمها ومراجعتها.</Text></View>
