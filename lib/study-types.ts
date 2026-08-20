@@ -137,6 +137,13 @@ export interface ReviewSession {
   completedAt: string;
 }
 
+export interface SubjectReviewChallenge {
+  id: string;
+  subjectId: string;
+  targetCards: number;
+  createdAt: string;
+}
+
 export interface StudyTask {
   id: string;
   subjectId?: string;
@@ -181,6 +188,7 @@ export interface StudyStore {
   reviewCards: ReviewCard[];
   reviewLists?: ReviewList[];
   reviewSessions?: ReviewSession[];
+  reviewChallenges?: SubjectReviewChallenge[];
   tasks: StudyTask[];
   syncSettings: SyncSettings;
   backupActivities?: BackupActivity[];
