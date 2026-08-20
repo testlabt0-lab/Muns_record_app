@@ -5,11 +5,12 @@ import { createActiveAcademicYear, deactivateAcademicYears, findOrCreateTerm, no
 import { scheduleReview, type ReviewGrade } from "@/lib/review-scheduler";
 import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, ReviewList, ReviewSession, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
 import { normalizeSubjectTermGoalTargets } from "@/lib/subject-term-goals";
+import { createReplacementSnapshot, restoreReplacementSnapshot as restoreSnapshot } from "@/lib/replacement-history";
 
 const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
-  years: [], terms: [], subjects: [], subjectGoals: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [],
+  years: [], terms: [], subjects: [], subjectGoals: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [], replacementSnapshots: [],
   syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, weeklyReviewReminderHour: 18, weeklyReviewReminderMinute: 0, appearanceMode: "light", lastBackupStatus: "idle" },
 };
 
@@ -38,6 +39,7 @@ type StudyContextValue = StudyStore & {
   createReviewChallenge: (subjectId: string, targetCards: number) => string;
   deleteReviewChallenge: (challengeId: string) => void;
   setSubjectTermGoal: (subjectId: string, targets: { lectureTarget: number; reviewTarget: number; focusMinutesTarget: number }) => void;
+  markSubjectGoalNearReminder: (subjectId: string) => void;
   reviewCard: (cardId: string, correct: boolean) => void;
   gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;
   addTask: (task: Omit<StudyTask, "id" | "createdAt" | "completed">) => string;
@@ -45,7 +47,9 @@ type StudyContextValue = StudyStore & {
   updateSyncSettings: (changes: Partial<StudyStore["syncSettings"]>) => void;
   addBackupActivity: (activity: Omit<BackupActivity, "id" | "createdAt">) => void;
   replaceStoreFromBackup: (backup: Partial<StudyStore>) => void;
-  replaceStoreFromLocalImport: (store: StudyStore) => void;
+  replaceStoreFromLocalImport: (store: StudyStore, snapshotLabel?: string) => void;
+  restoreReplacementSnapshot: (snapshotId: string) => void;
+  deleteReplacementSnapshot: (snapshotId: string) => void;
   getYear: (id: string) => AcademicYear | undefined;
   getTerm: (id: string) => AcademicTerm | undefined;
   getSubject: (id: string) => Subject | undefined;
@@ -61,7 +65,7 @@ function normalizeStore(value: Partial<StudyStore>): StudyStore {
   return {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [], subjectGoals: value.subjectGoals ?? [],
     lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], tagColors: lecture.tagColors ?? {}, bookmarks: lecture.bookmarks ?? [], attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
-    reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], reviewSessions: value.reviewSessions ?? [], reviewChallenges: value.reviewChallenges ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
+    reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], reviewSessions: value.reviewSessions ?? [], reviewChallenges: value.reviewChallenges ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [], replacementSnapshots: value.replacementSnapshots ?? [],
     syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, weeklyReviewReminderHour: 18, weeklyReviewReminderMinute: 0, appearanceMode: "light", lastBackupStatus: "idle", ...value.syncSettings },
   };
 }
@@ -122,7 +126,8 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       addReviewSession: (durationMinutes, subjectId) => setStore((current) => ({ ...current, reviewSessions: [{ id: makeId("review-session"), durationMinutes, subjectId, completedAt: new Date().toISOString() }, ...(current.reviewSessions ?? [])].slice(0, 60) })),
       createReviewChallenge: (subjectId, targetCards) => { const id = makeId("review-challenge"); if (!store.subjects.some((subject) => subject.id === subjectId)) throw new Error("المادة غير موجودة"); if (!Number.isInteger(targetCards) || targetCards < 1 || targetCards > 999) throw new Error("حدد عدداً صحيحاً للبطاقات"); setStore((current) => ({ ...current, reviewChallenges: [{ id, subjectId, targetCards, createdAt: new Date().toISOString() }, ...(current.reviewChallenges ?? []).filter((challenge) => challenge.subjectId !== subjectId)] })); return id; },
       deleteReviewChallenge: (challengeId) => setStore((current) => ({ ...current, reviewChallenges: (current.reviewChallenges ?? []).filter((challenge) => challenge.id !== challengeId) })),
-      setSubjectTermGoal: (subjectId, targets) => { if (!store.subjects.some((subject) => subject.id === subjectId)) throw new Error("المادة غير موجودة"); const normalized = normalizeSubjectTermGoalTargets(targets); setStore((current) => ({ ...current, subjectGoals: [{ subjectId, ...normalized, updatedAt: new Date().toISOString() }, ...(current.subjectGoals ?? []).filter((goal) => goal.subjectId !== subjectId)] })); },
+      setSubjectTermGoal: (subjectId, targets) => { if (!store.subjects.some((subject) => subject.id === subjectId)) throw new Error("المادة غير موجودة"); const normalized = normalizeSubjectTermGoalTargets(targets); setStore((current) => ({ ...current, subjectGoals: [{ subjectId, ...normalized, updatedAt: new Date().toISOString(), nearGoalReminderNotifiedAt: undefined }, ...(current.subjectGoals ?? []).filter((goal) => goal.subjectId !== subjectId)] })); },
+      markSubjectGoalNearReminder: (subjectId) => setStore((current) => ({ ...current, subjectGoals: (current.subjectGoals ?? []).map((goal) => goal.subjectId === subjectId ? { ...goal, nearGoalReminderNotifiedAt: new Date().toISOString() } : goal) })),
       reviewCard: (cardId, correct) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => {
         if (card.id !== cardId) return card;
         return { ...card, ...scheduleReview(card, correct ? "good" : "again") };
@@ -133,7 +138,9 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       updateSyncSettings: (changes) => setStore((current) => ({ ...current, syncSettings: { ...current.syncSettings, ...changes } })),
       addBackupActivity: (activity) => setStore((current) => ({ ...current, backupActivities: [{ ...activity, id: makeId("backup-activity"), createdAt: new Date().toISOString() }, ...(current.backupActivities ?? [])].slice(0, 30) })),
       replaceStoreFromBackup: (backup) => setStore(normalizeStore({ ...backup, syncSettings: { ...backup.syncSettings, cloudBackupEnabled: true, lastBackupStatus: "completed", lastBackupAt: new Date().toISOString() } })),
-      replaceStoreFromLocalImport: (nextStore) => setStore(normalizeStore(nextStore)),
+      replaceStoreFromLocalImport: (nextStore, snapshotLabel) => setStore((current) => { const history = snapshotLabel ? [createReplacementSnapshot(makeId("replace-snapshot"), snapshotLabel, current, new Date().toISOString()), ...(current.replacementSnapshots ?? [])].slice(0, 3) : (current.replacementSnapshots ?? []); return normalizeStore({ ...nextStore, replacementSnapshots: history }); }),
+      restoreReplacementSnapshot: (snapshotId) => setStore((current) => { const snapshot = (current.replacementSnapshots ?? []).find((item) => item.id === snapshotId); if (!snapshot) return current; const safety = createReplacementSnapshot(makeId("replace-snapshot"), "حالة قبل الاستعادة", current, new Date().toISOString()); return normalizeStore(restoreSnapshot(current, snapshot, safety)); }),
+      deleteReplacementSnapshot: (snapshotId) => setStore((current) => ({ ...current, replacementSnapshots: (current.replacementSnapshots ?? []).filter((item) => item.id !== snapshotId) })),
       getYear, getTerm, getSubject,
       getTermForYear: (yearId, kind) => store.terms.find((term) => term.yearId === yearId && term.kind === kind),
       getLecturesForSubject: (subjectId, section) => store.lectures.filter((lecture) => lecture.subjectId === subjectId && (!section || lecture.section === section)),

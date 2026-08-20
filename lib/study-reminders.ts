@@ -72,6 +72,16 @@ export async function notifyWeeklyGoalReached() {
   });
 }
 
+export async function notifySubjectGoalNear(subjectTitle: string, metricLabels: string[]) {
+  if (Platform.OS === "web") return false;
+  if (Platform.OS === "android") await Notifications.setNotificationChannelAsync("study-subject-goals", { name: "أهداف المواد", importance: Notifications.AndroidImportance.DEFAULT });
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return false;
+  await Notifications.scheduleNotificationAsync({ content: { title: `اقتربت من هدف ${subjectTitle}`, body: `تبقّى القليل لإتمام: ${metricLabels.join("، ")}.`, data: { url: "/subject" } }, trigger: null });
+  return true;
+}
+
 export async function scheduleWeeklyDigestReminder() {
   if (Platform.OS === "web") return undefined;
   if (Platform.OS === "android") {

@@ -37,6 +37,7 @@ export interface SubjectTermGoal {
   reviewTarget: number;
   focusMinutesTarget: number;
   updatedAt: string;
+  nearGoalReminderNotifiedAt?: string;
 }
 
 export interface TranscriptSegment {
@@ -198,6 +199,13 @@ export interface BackupActivity {
   createdAt: string;
 }
 
+export interface ReplacementSnapshot {
+  id: string;
+  label: string;
+  createdAt: string;
+  data: Omit<StudyStore, "replacementSnapshots">;
+}
+
 export interface StudyStore {
   years: AcademicYear[];
   terms: AcademicTerm[];
@@ -211,4 +219,5 @@ export interface StudyStore {
   tasks: StudyTask[];
   syncSettings: SyncSettings;
   backupActivities?: BackupActivity[];
+  replacementSnapshots?: ReplacementSnapshot[];
 }

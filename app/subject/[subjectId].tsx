@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -10,16 +10,21 @@ import { appTheme } from "@/lib/app-theme";
 import { useStudy } from "@/lib/study-context";
 import { getSubjectProgress, progressPercent } from "@/lib/subject-progress";
 import { createSubjectProgressReportHtml } from "@/lib/subject-progress-report";
+import { getNearSubjectGoalMetrics } from "@/lib/subject-goal-reminder";
+import { notifySubjectGoalNear } from "@/lib/study-reminders";
 import type { Lecture, SubjectSection, SubjectTermGoal } from "@/lib/study-types";
 import { ScreenContainer } from "@/components/screen-container";
 
 export default function SubjectDetailScreen() {
   const router = useRouter();
   const { subjectId } = useLocalSearchParams<{ subjectId: string }>();
-  const { hydrated, getSubject, getLecturesForSubject, lectures, reviewCards, reviewSessions, tasks, subjectGoals, setSubjectTermGoal } = useStudy();
+  const { hydrated, getSubject, getLecturesForSubject, lectures, reviewCards, reviewSessions, tasks, subjectGoals, setSubjectTermGoal, markSubjectGoalNearReminder } = useStudy();
   const [section, setSection] = useState<SubjectSection>("theory");
   const [exportingProgress, setExportingProgress] = useState(false);
   const progress = useMemo(() => getSubjectProgress(subjectId, lectures, reviewCards, reviewSessions ?? [], tasks), [lectures, reviewCards, reviewSessions, subjectId, tasks]);
+  const goalForReminder = (subjectGoals ?? []).find((goal) => goal.subjectId === subjectId);
+  const subjectForReminder = getSubject(subjectId);
+  useEffect(() => { if (!hydrated || !subjectForReminder || !goalForReminder || goalForReminder.nearGoalReminderNotifiedAt) return; const metrics = getNearSubjectGoalMetrics(progress, goalForReminder); if (!metrics.length) return; void notifySubjectGoalNear(subjectForReminder.title, metrics.map((metric) => metric.label)).then((sent) => { if (sent) markSubjectGoalNearReminder(subjectForReminder.id); }); }, [goalForReminder, hydrated, markSubjectGoalNearReminder, progress, subjectForReminder]);
   if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   const subject = getSubject(subjectId);
   if (!subject) return <ScreenContainer className="p-5"><AppHeader title="المادة" action={<IconButton icon="arrow-forward" label="رجوع" onPress={() => router.back()} />} /><EmptyState icon="error-outline" title="لم نجد هذه المادة" description="ارجع إلى قائمة المواد واختر مادة متاحة." /></ScreenContainer>;
