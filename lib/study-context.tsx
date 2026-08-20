@@ -28,6 +28,7 @@ type StudyContextValue = StudyStore & {
   restoreArchivedLecture: (lectureId: string) => void;
   addAttachment: (lectureId: string, attachment: Omit<LectureAttachment, "id" | "lectureId" | "createdAt">) => string;
   removeAttachment: (lectureId: string, attachmentId: string) => void;
+  updateAttachment: (lectureId: string, attachmentId: string, changes: Partial<Omit<LectureAttachment, "id" | "lectureId" | "createdAt">>) => void;
   addReviewCards: (lectureId: string, cards: Array<Pick<ReviewCard, "question" | "answer">>) => void;
   reviewCard: (cardId: string, correct: boolean) => void;
   gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;
@@ -104,6 +105,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
         setStore((current) => ({ ...current, lectures: current.lectures.map((lecture) => lecture.id === lectureId ? { ...lecture, attachments: [...(lecture.attachments ?? []), { ...attachment, id, lectureId, createdAt: new Date().toISOString() }] } : lecture) })); return id;
       },
       removeAttachment: (lectureId, attachmentId) => setStore((current) => ({ ...current, lectures: current.lectures.map((lecture) => lecture.id === lectureId ? { ...lecture, attachments: (lecture.attachments ?? []).filter((attachment) => attachment.id !== attachmentId) } : lecture) })),
+      updateAttachment: (lectureId, attachmentId, changes) => setStore((current) => ({ ...current, lectures: current.lectures.map((lecture) => lecture.id === lectureId ? { ...lecture, attachments: (lecture.attachments ?? []).map((attachment) => attachment.id === attachmentId ? { ...attachment, ...changes } : attachment) } : lecture) })),
       addReviewCards: (lectureId, cards) => setStore((current) => ({ ...current, reviewCards: [...current.reviewCards, ...cards.map((card) => ({ ...card, id: makeId("review"), lectureId, dueAt: new Date().toISOString(), intervalDays: 1, repetitions: 0 }))] })),
       reviewCard: (cardId, correct) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => {
         if (card.id !== cardId) return card;

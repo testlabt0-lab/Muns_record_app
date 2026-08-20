@@ -46,6 +46,11 @@ export interface LectureAttachment {
   uri: string;
   mimeType: string;
   sizeBytes?: number;
+  extractionStatus?: ProcessingStatus;
+  extractedText?: string;
+  extractionKeyPoints?: string[];
+  extractionError?: string;
+  extractedAt?: string;
   createdAt: string;
 }
 

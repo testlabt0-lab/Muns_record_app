@@ -7,6 +7,7 @@ import * as db from "./db";
 import { isAudioBackupEncryptionConfigured } from "./audio-backup-crypto";
 import { decryptAudioBackup, encryptAudioBackup } from "./audio-backup-crypto";
 import { storageGetSignedUrl, storagePut } from "./storage";
+import { MAX_ATTACHMENT_EXTRACTION_BYTES, isImageExtractionSupported } from "../lib/attachment-extraction";
 import { z } from "zod";
 
 const rawLectureSummarySchema = z.object({
@@ -29,6 +30,11 @@ function normalizeLectureSummary(value: unknown) {
     }),
   };
 }
+
+const attachmentExtractionSchema = z.object({
+  text: z.string().min(1).max(30_000),
+  keyPoints: z.array(z.string().min(1).max(500)).max(8),
+});
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -66,6 +72,28 @@ export const appRouter = router({
         } catch {
           throw new Error("تعذر التحقق من بنية الملخص الناتج.");
         }
+      }),
+  }),
+  attachments: router({
+    extractImageText: publicProcedure
+      .input(z.object({ fileName: z.string().min(1).max(255), mimeType: z.string().min(1).max(64), dataBase64: z.string().min(4).max(8_400_000) }))
+      .mutation(async ({ input }) => {
+        if (!isImageExtractionSupported(input.mimeType)) throw new Error("استخراج النص متاح لصور JPG وPNG وWebP فقط.");
+        const raw = Buffer.from(input.dataBase64, "base64");
+        if (!raw.length || raw.length > MAX_ATTACHMENT_EXTRACTION_BYTES) throw new Error("حجم الصورة غير صالح لاستخراج النص. الحد الأقصى هو 6 ميغابايت.");
+        const models = await listLLMModels();
+        const model = models.data.find((candidate) => candidate.id === "gemini-3-flash-preview")?.id ?? models.data.find((candidate) => candidate.id === "gpt-5-mini")?.id;
+        const response = await invokeLLM({
+          model,
+          messages: [
+            { role: "system", content: "أنت نظام استخراج معرفي دقيق من صور تعليمية. انسخ النص الظاهر فقط ولا تخمّن الكلمات غير المقروءة. أعد JSON فقط بالمفتاحين text وkeyPoints. اكتب النص بالعربية كما يظهر أو بلغته الأصلية، واجعل keyPoints قائمة قصيرة بالحقائق الواضحة في الصورة." },
+            { role: "user", content: [{ type: "text", text: `استخرج المحتوى من المرفق «${input.fileName}».` }, { type: "image_url", image_url: { url: `data:${input.mimeType};base64,${input.dataBase64}`, detail: "high" } }] },
+          ],
+          response_format: { type: "json_schema", json_schema: { name: "attachment_extraction", strict: true, schema: { type: "object", properties: { text: { type: "string" }, keyPoints: { type: "array", items: { type: "string" } } }, required: ["text", "keyPoints"], additionalProperties: false } } },
+        });
+        const content = response.choices[0]?.message?.content;
+        if (!content || typeof content !== "string") throw new Error("لم تُرجع خدمة الاستخراج محتوى صالحاً.");
+        try { return attachmentExtractionSchema.parse(JSON.parse(content)); } catch { throw new Error("تعذر التحقق من النص المستخرج من الصورة."); }
       }),
   }),
   studySync: router({
