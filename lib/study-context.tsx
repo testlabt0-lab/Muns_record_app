@@ -3,13 +3,13 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { createActiveAcademicYear, deactivateAcademicYears, findOrCreateTerm, normalizeRequiredTitle } from "@/lib/study-domain";
 import { scheduleReview, type ReviewGrade } from "@/lib/review-scheduler";
-import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, ReviewList, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
+import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, ReviewList, ReviewSession, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
 
 const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
-  years: [], terms: [], subjects: [], lectures: [], reviewCards: [], reviewLists: [], tasks: [], backupActivities: [],
-  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, lastBackupStatus: "idle" },
+  years: [], terms: [], subjects: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], tasks: [], backupActivities: [],
+  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, lastBackupStatus: "idle" },
 };
 
 type AddSubjectInput = { title: string; color: string; hasPracticalSection: boolean; theoryInstructor: string; practicalInstructor?: string };
@@ -33,6 +33,7 @@ type StudyContextValue = StudyStore & {
   createReviewList: (title: string, lectureIds: string[]) => string;
   toggleReviewListLecture: (listId: string, lectureId: string) => void;
   deleteReviewList: (listId: string) => void;
+  addReviewSession: (durationMinutes: number) => void;
   reviewCard: (cardId: string, correct: boolean) => void;
   gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;
   addTask: (task: Omit<StudyTask, "id" | "createdAt" | "completed">) => string;
@@ -55,8 +56,8 @@ function normalizeStore(value: Partial<StudyStore>): StudyStore {
   return {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [],
     lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], tagColors: lecture.tagColors ?? {}, attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
-    reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
-    syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, lastBackupStatus: "idle", ...value.syncSettings },
+    reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], reviewSessions: value.reviewSessions ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
+    syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, lastBackupStatus: "idle", ...value.syncSettings },
   };
 }
 
@@ -113,6 +114,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       createReviewList: (title, lectureIds) => { const id = makeId("review-list"); const normalizedTitle = normalizeRequiredTitle(title, "اسم قائمة المراجعة"); const uniqueLectureIds = Array.from(new Set(lectureIds)); setStore((current) => ({ ...current, reviewLists: [{ id, title: normalizedTitle, lectureIds: uniqueLectureIds, completedLectureIds: [], createdAt: new Date().toISOString() }, ...(current.reviewLists ?? [])] })); return id; },
       toggleReviewListLecture: (listId, lectureId) => setStore((current) => ({ ...current, reviewLists: (current.reviewLists ?? []).map((list) => list.id !== listId ? list : { ...list, completedLectureIds: list.completedLectureIds.includes(lectureId) ? list.completedLectureIds.filter((id) => id !== lectureId) : [...list.completedLectureIds, lectureId] }) })),
       deleteReviewList: (listId) => setStore((current) => ({ ...current, reviewLists: (current.reviewLists ?? []).filter((list) => list.id !== listId) })),
+      addReviewSession: (durationMinutes) => setStore((current) => ({ ...current, reviewSessions: [{ id: makeId("review-session"), durationMinutes, completedAt: new Date().toISOString() }, ...(current.reviewSessions ?? [])].slice(0, 60) })),
       reviewCard: (cardId, correct) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => {
         if (card.id !== cardId) return card;
         return { ...card, ...scheduleReview(card, correct ? "good" : "again") };

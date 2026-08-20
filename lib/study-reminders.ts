@@ -57,6 +57,20 @@ export async function notifyBackupOutcome(status: "completed" | "failed", messag
   });
 }
 
+export async function notifyWeeklyGoalReached() {
+  if (Platform.OS === "web") return;
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("study-goals", { name: "أهداف الدراسة", importance: Notifications.AndroidImportance.DEFAULT });
+  }
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return;
+  await Notifications.scheduleNotificationAsync({
+    content: { title: "أكملت أهداف الأسبوع", body: "أحسنت، حققت هدف المحاضرات وبطاقات المراجعة لهذا الأسبوع.", data: { url: "/weekly-summary" } },
+    trigger: null,
+  });
+}
+
 export async function scheduleWeeklyDigestReminder() {
   if (Platform.OS === "web") return undefined;
   if (Platform.OS === "android") {
