@@ -71,6 +71,7 @@ export interface Lecture {
   section: SubjectSection;
   title: string;
   recordedAt: string;
+  archivedAt?: string;
   durationSeconds: number;
   audioUri?: string;
   audioSizeBytes?: number;
@@ -122,6 +123,8 @@ export interface SyncSettings {
   recordingPartMinutes?: number;
   preferredPlaybackRate?: number;
   storageWarningPercent?: number;
+  weeklyDigestEnabled?: boolean;
+  weeklyDigestNotificationId?: string;
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
 }

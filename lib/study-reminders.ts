@@ -38,3 +38,21 @@ export async function notifyBackupOutcome(status: "completed" | "failed", messag
     trigger: null,
   });
 }
+
+export async function scheduleWeeklyDigestReminder() {
+  if (Platform.OS === "web") return undefined;
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("study-weekly", { name: "ملخص أسبوعي", importance: Notifications.AndroidImportance.DEFAULT });
+  }
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return undefined;
+  return Notifications.scheduleNotificationAsync({
+    content: { title: "ملخصك الأسبوعي جاهز", body: "افتح مُحاضِر لمراجعة المحاضرات الجديدة ومساحة التخزين لهذا الأسبوع.", data: { url: "/storage" } },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: 1, hour: 19, minute: 0, channelId: "study-weekly" },
+  });
+}
+
+export async function cancelWeeklyDigestReminder(notificationId?: string) {
+  if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
+}
