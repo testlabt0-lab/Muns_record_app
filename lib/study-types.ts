@@ -113,6 +113,7 @@ export interface SyncSettings {
   cloudBackupEnabled: boolean;
   recordingPartMinutes?: number;
   preferredPlaybackRate?: number;
+  storageWarningPercent?: number;
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
 }

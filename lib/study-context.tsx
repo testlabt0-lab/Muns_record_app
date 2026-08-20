@@ -8,7 +8,7 @@ const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
   years: [], terms: [], subjects: [], lectures: [], reviewCards: [], tasks: [], backupActivities: [],
-  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, lastBackupStatus: "idle" },
+  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, lastBackupStatus: "idle" },
 };
 
 type AddSubjectInput = { title: string; color: string; hasPracticalSection: boolean; theoryInstructor: string; practicalInstructor?: string };
@@ -22,6 +22,7 @@ type StudyContextValue = StudyStore & {
   addLecture: (input: CreateLectureInput) => string;
   updateLecture: (lectureId: string, changes: Partial<Omit<Lecture, "id" | "subjectId" | "section" | "recordedAt">>) => void;
   deleteLecture: (lectureId: string) => void;
+  restoreDeletedLecture: (lecture: Lecture, reviewCards: ReviewCard[]) => void;
   addAttachment: (lectureId: string, attachment: Omit<LectureAttachment, "id" | "lectureId" | "createdAt">) => string;
   removeAttachment: (lectureId: string, attachmentId: string) => void;
   addReviewCards: (lectureId: string, cards: Array<Pick<ReviewCard, "question" | "answer">>) => void;
@@ -47,7 +48,7 @@ function normalizeStore(value: Partial<StudyStore>): StudyStore {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [],
     lectures: value.lectures?.map((lecture) => ({ ...lecture, attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
     reviewCards: value.reviewCards ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
-    syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, lastBackupStatus: "idle", ...value.syncSettings },
+    syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, lastBackupStatus: "idle", ...value.syncSettings },
   };
 }
 
@@ -91,6 +92,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       },
       updateLecture: (lectureId, changes) => setStore((current) => ({ ...current, lectures: current.lectures.map((lecture) => lecture.id === lectureId ? { ...lecture, ...changes } : lecture) })),
       deleteLecture: (lectureId) => setStore((current) => ({ ...current, lectures: current.lectures.filter((lecture) => lecture.id !== lectureId), reviewCards: current.reviewCards.filter((card) => card.lectureId !== lectureId) })),
+      restoreDeletedLecture: (lecture, cards) => setStore((current) => ({ ...current, lectures: [lecture, ...current.lectures.filter((item) => item.id !== lecture.id)], reviewCards: [...current.reviewCards.filter((card) => card.lectureId !== lecture.id), ...cards] })),
       addAttachment: (lectureId, attachment) => {
         const id = makeId("attachment");
         setStore((current) => ({ ...current, lectures: current.lectures.map((lecture) => lecture.id === lectureId ? { ...lecture, attachments: [...(lecture.attachments ?? []), { ...attachment, id, lectureId, createdAt: new Date().toISOString() }] } : lecture) })); return id;
