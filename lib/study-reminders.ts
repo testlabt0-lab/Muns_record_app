@@ -25,6 +25,24 @@ export async function cancelStudyReminder(notificationId?: string) {
   if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
 }
 
+export async function scheduleReviewSessionReminder(seconds: number) {
+  if (Platform.OS === "web" || !Number.isFinite(seconds) || seconds < 1) return undefined;
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("study-review", { name: "جلسات المراجعة", importance: Notifications.AndroidImportance.DEFAULT });
+  }
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return undefined;
+  return Notifications.scheduleNotificationAsync({
+    content: { title: "انتهت جلسة المراجعة", body: "أحسنت، خذ استراحة قصيرة ثم واصل دراستك.", data: { url: "/review" } },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(Date.now() + Math.ceil(seconds) * 1000), channelId: "study-review" },
+  });
+}
+
+export async function cancelReviewSessionReminder(notificationId?: string) {
+  if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
+}
+
 export async function notifyBackupOutcome(status: "completed" | "failed", message: string) {
   if (Platform.OS === "web") return;
   if (Platform.OS === "android") {
