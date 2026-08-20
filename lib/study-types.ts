@@ -49,6 +49,8 @@ export interface LectureAttachment {
   extractionStatus?: ProcessingStatus;
   extractedText?: string;
   extractionKeyPoints?: string[];
+  extractionReviewCards?: { question: string; answer: string }[];
+  extractionReviewCardsAddedAt?: string;
   extractionError?: string;
   extractedAt?: string;
   createdAt: string;

@@ -34,6 +34,7 @@ function normalizeLectureSummary(value: unknown) {
 const attachmentExtractionSchema = z.object({
   text: z.string().min(1).max(30_000),
   keyPoints: z.array(z.string().min(1).max(500)).max(8),
+  reviewCards: z.array(z.object({ question: z.string().min(3).max(500), answer: z.string().min(1).max(1_000) })).max(5),
 });
 
 export const appRouter = router({
@@ -86,10 +87,10 @@ export const appRouter = router({
         const response = await invokeLLM({
           model,
           messages: [
-            { role: "system", content: "أنت نظام استخراج معرفي دقيق من صور تعليمية. انسخ النص الظاهر فقط ولا تخمّن الكلمات غير المقروءة. أعد JSON فقط بالمفتاحين text وkeyPoints. اكتب النص بالعربية كما يظهر أو بلغته الأصلية، واجعل keyPoints قائمة قصيرة بالحقائق الواضحة في الصورة." },
+            { role: "system", content: "أنت نظام استخراج معرفي دقيق من صور تعليمية. انسخ النص الظاهر فقط ولا تخمّن الكلمات غير المقروءة. أعد JSON فقط بالمفاتيح text وkeyPoints وreviewCards. اكتب النص بالعربية كما يظهر أو بلغته الأصلية، واجعل keyPoints قائمة قصيرة بالحقائق الواضحة في الصورة. أنشئ حتى خمس بطاقات سؤال وجواب للمراجعة الذاتية من معلومات ظاهرة بوضوح فقط؛ لا تخترع حقائق ولا تضف بطاقة إذا كانت الصورة لا تكفي." },
             { role: "user", content: [{ type: "text", text: `استخرج المحتوى من المرفق «${input.fileName}».` }, { type: "image_url", image_url: { url: `data:${input.mimeType};base64,${input.dataBase64}`, detail: "high" } }] },
           ],
-          response_format: { type: "json_schema", json_schema: { name: "attachment_extraction", strict: true, schema: { type: "object", properties: { text: { type: "string" }, keyPoints: { type: "array", items: { type: "string" } } }, required: ["text", "keyPoints"], additionalProperties: false } } },
+          response_format: { type: "json_schema", json_schema: { name: "attachment_extraction", strict: true, schema: { type: "object", properties: { text: { type: "string" }, keyPoints: { type: "array", items: { type: "string" } }, reviewCards: { type: "array", items: { type: "object", properties: { question: { type: "string" }, answer: { type: "string" } }, required: ["question", "answer"], additionalProperties: false } } }, required: ["text", "keyPoints", "reviewCards"], additionalProperties: false } } },
         });
         const content = response.choices[0]?.message?.content;
         if (!content || typeof content !== "string") throw new Error("لم تُرجع خدمة الاستخراج محتوى صالحاً.");
