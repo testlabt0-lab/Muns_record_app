@@ -72,6 +72,13 @@ export interface TranscribedAudioPart {
   completedAt: string;
 }
 
+export interface LectureBookmark {
+  id: string;
+  label: string;
+  seconds: number;
+  createdAt: string;
+}
+
 export interface Lecture {
   id: string;
   subjectId: string;
@@ -81,6 +88,7 @@ export interface Lecture {
   archivedAt?: string;
   tags?: string[];
   tagColors?: Record<string, string>;
+  bookmarks?: LectureBookmark[];
   durationSeconds: number;
   audioUri?: string;
   audioSizeBytes?: number;

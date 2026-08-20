@@ -12,6 +12,7 @@ import { getApiBaseUrl, startOAuthLogin } from "@/constants/oauth";
 import { appTheme } from "@/lib/app-theme";
 import { applyDetectedDuration } from "@/lib/audio-duration";
 import { exportLecturePdf } from "@/lib/lecture-export";
+import { normalizeBookmark } from "@/lib/lecture-bookmarks";
 import { attachmentKindFromMime, persistAttachment } from "@/lib/local-attachments";
 import { getAttachmentExtractionError, isImageExtractionSupported } from "@/lib/attachment-extraction";
 import type { LectureAttachment } from "@/lib/study-types";
@@ -50,6 +51,7 @@ export default function LectureDetailScreen() {
   const [failedUploadItem, setFailedUploadItem] = useState<BackupUploadItem | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [tagColor, setTagColor] = useState(TAG_COLORS[0]);
+  const [bookmarkLabel, setBookmarkLabel] = useState("");
   const pauseRequested = useRef(false);
 
   useEffect(() => { void setAudioModeAsync({ playsInSilentMode: true }); }, []);
@@ -104,6 +106,18 @@ export default function LectureDetailScreen() {
       offset += duration;
     }
   };
+
+  const addBookmark = () => {
+    if (!activePart) { Alert.alert("لا يوجد تسجيل", "أضف أو سجّل ملفًا صوتيًا قبل حفظ إشارة زمنية."); return; }
+    const partOffset = audioParts.slice(0, activePartIndex).reduce((total, part) => total + part.durationSeconds, 0);
+    const normalized = normalizeBookmark(bookmarkLabel, playerStatus.currentTime, playerStatus.duration || activePart.durationSeconds);
+    const seconds = partOffset + normalized.seconds;
+    if ((lecture.bookmarks ?? []).some((bookmark) => Math.abs(bookmark.seconds - seconds) < 1)) { Alert.alert("الإشارة موجودة", "توجد إشارة محفوظة عند هذا الموضع تقريبًا."); return; }
+    updateLecture(lecture.id, { bookmarks: [...(lecture.bookmarks ?? []), { id: `bookmark-${Date.now()}`, ...normalized, seconds, createdAt: new Date().toISOString() }] });
+    setBookmarkLabel("");
+  };
+
+  const removeBookmark = (bookmarkId: string) => updateLecture(lecture.id, { bookmarks: (lecture.bookmarks ?? []).filter((bookmark) => bookmark.id !== bookmarkId) });
 
   const transcribe = async () => {
     const parts = lecture.audioParts?.length ? lecture.audioParts : lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds }] : [];
@@ -293,6 +307,8 @@ export default function LectureDetailScreen() {
       {audioParts.length > 1 ? <Text style={styles.partLabel}>الجزء {activePartIndex + 1} من {audioParts.length}</Text> : null}
       <Pressable onPress={togglePlayback} style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}><MaterialIcons name={playerStatus.playing ? "pause" : "play-arrow"} size={27} color="#FFFFFF" /><Text style={styles.playText}>{playerStatus.playing ? "إيقاف مؤقت" : "تشغيل التسجيل"}</Text></Pressable>
     </View>
+
+    <View style={styles.attachmentsCard}><View style={styles.attachmentsHeader}><Text style={styles.sectionTitle}>إشارات المحاضرة</Text><StatusPill label={`${(lecture.bookmarks ?? []).length} إشارة`} tone="neutral" /></View><Text style={styles.attachmentPrivacy}>احفظ موضعًا مهمًا أثناء التشغيل، ثم اضغط عليه للعودة إليه لاحقًا.</Text><View style={styles.attachmentRow}><TextInput value={bookmarkLabel} onChangeText={setBookmarkLabel} onSubmitEditing={addBookmark} returnKeyType="done" placeholder="مثال: تعريف مهم أو سؤال" placeholderTextColor="#94A3B8" textAlign="right" style={styles.attachmentTitle} /><Pressable disabled={!activePart} accessibilityLabel="حفظ إشارة زمنية" onPress={addBookmark} style={[styles.attachmentDelete, !activePart && styles.disabled]}><MaterialIcons name="bookmark-add" size={18} color={appTheme.primary} /></Pressable></View>{(lecture.bookmarks ?? []).slice().sort((a, b) => a.seconds - b.seconds).map((bookmark) => <View key={bookmark.id} style={styles.attachmentTop}><Pressable accessibilityLabel={`تشغيل من ${bookmark.label}`} onPress={() => playTranscriptSegment(bookmark.seconds)} style={styles.attachmentOpen}><MaterialIcons name="bookmark" size={19} color={appTheme.primary} /><Text style={styles.attachmentTitle} numberOfLines={1}>{bookmark.label}</Text><Text style={styles.segmentTime}>{formatDuration(bookmark.seconds)}</Text></Pressable><Pressable accessibilityLabel={`حذف إشارة ${bookmark.label}`} onPress={() => removeBookmark(bookmark.id)} style={styles.attachmentDelete}><MaterialIcons name="close" size={17} color={appTheme.danger} /></Pressable></View>)}</View>
 
     <Pressable disabled={!lecture.transcript && !lecture.summary} onPress={exportPdf} style={({ pressed }) => [styles.exportButton, (!lecture.transcript && !lecture.summary) && styles.disabled, pressed && styles.pressed]}><MaterialIcons name="picture-as-pdf" size={20} color={appTheme.primary} /><Text style={styles.exportText}>تصدير النص والملخص PDF</Text></Pressable>
     <View style={styles.attachmentsCard}><View style={styles.attachmentsHeader}><Text style={styles.sectionTitle}>وسوم المحاضرة</Text><StatusPill label={`${(lecture.tags ?? []).length} وسم`} tone="neutral" /></View><Text style={styles.attachmentActionText}>قوالب سريعة</Text><View style={styles.tags}>{TAG_TEMPLATES.map((template) => <Pressable key={template.label} onPress={() => addTagValue(template.label, template.color)} style={[styles.tag, { backgroundColor: `${template.color}20` }]}><Text style={[styles.tagText, { color: template.color }]}>{template.label} +</Text></Pressable>)}</View><View style={styles.tags}>{TAG_COLORS.map((color) => <Pressable key={color} onPress={() => setTagColor(color)} style={[styles.tag, { backgroundColor: color, opacity: tagColor === color ? 1 : 0.35 }]}><Text style={[styles.tagText, { color: "#FFFFFF" }]}>{tagColor === color ? "✓" : "●"}</Text></Pressable>)}</View><View style={styles.attachmentRow}><TextInput value={tagInput} onChangeText={setTagInput} onSubmitEditing={addTag} returnKeyType="done" placeholder="مثل: امتحان، مهم، مشروع" placeholderTextColor="#94A3B8" textAlign="right" style={styles.attachmentTitle} /><Pressable accessibilityLabel="إضافة وسم" onPress={addTag} style={styles.attachmentDelete}><MaterialIcons name="add" size={18} color={tagColor} /></Pressable></View>{(lecture.tags ?? []).length ? <View style={styles.tags}>{(lecture.tags ?? []).map((tag) => { const color = lecture.tagColors?.[tag] ?? appTheme.primary; return <Pressable key={tag} onPress={() => removeTag(tag)} style={[styles.tag, { backgroundColor: `${color}20` }]}><Text style={[styles.tagText, { color }]}>{tag} ×</Text></Pressable>; })}</View> : <Text style={styles.attachmentActionText}>اختر لوناً ثم أضف وسوماً قصيرة لتسهيل العثور على المحاضرة لاحقاً.</Text>}</View>
