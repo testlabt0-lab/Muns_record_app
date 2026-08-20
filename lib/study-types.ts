@@ -58,6 +58,13 @@ export interface LectureAudioPart {
   createdAt: string;
 }
 
+export interface TranscribedAudioPart {
+  sourceId: string;
+  text: string;
+  segments: TranscriptSegment[];
+  completedAt: string;
+}
+
 export interface Lecture {
   id: string;
   subjectId: string;
@@ -70,6 +77,7 @@ export interface Lecture {
   audioParts?: LectureAudioPart[];
   transcript?: string;
   transcriptSegments?: TranscriptSegment[];
+  transcribedAudioParts?: TranscribedAudioPart[];
   summary?: LectureSummary;
   transcriptionStatus: ProcessingStatus;
   summaryStatus: ProcessingStatus;

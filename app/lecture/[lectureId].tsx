@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { File } from "expo-file-system";
@@ -8,13 +8,13 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 
 import { AppHeader, EmptyState, IconButton, LoadingView, PrimaryButton, StatusPill } from "@/components/study-ui";
-import { getApiBaseUrl } from "@/constants/oauth";
-import { startOAuthLogin } from "@/constants/oauth";
+import { getApiBaseUrl, startOAuthLogin } from "@/constants/oauth";
 import { appTheme } from "@/lib/app-theme";
 import { exportLecturePdf } from "@/lib/lecture-export";
 import { attachmentKindFromMime, persistAttachment } from "@/lib/local-attachments";
 import { useStudy } from "@/lib/study-context";
 import { notifyBackupOutcome } from "@/lib/study-reminders";
+import { buildMergedTranscript, getTranscriptionProgress, mergeTranscribedPart } from "@/lib/transcription-progress";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/hooks/use-auth";
 import { ScreenContainer } from "@/components/screen-container";
@@ -27,7 +27,7 @@ export default function LectureDetailScreen() {
   const { hydrated, lectures, getSubject, updateLecture, addReviewCards, reviewCards, addAttachment, removeAttachment, syncSettings, updateSyncSettings, addBackupActivity } = useStudy();
   const lecture = lectures.find((item) => item.id === lectureId);
   const subject = lecture ? getSubject(lecture.subjectId) : undefined;
-  const audioParts = lecture?.audioParts?.length ? lecture.audioParts : lecture?.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds }] : [];
+  const audioParts = useMemo(() => lecture?.audioParts?.length ? lecture.audioParts : lecture?.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds }] : [], [lecture]);
   const [activePartIndex, setActivePartIndex] = useState(0);
   const [pendingPlayback, setPendingPlayback] = useState<{ seekSeconds: number; play: boolean } | null>(null);
   const player = useAudioPlayer(audioParts[activePartIndex]?.uri ?? lecture?.audioUri ?? null);
@@ -93,35 +93,40 @@ export default function LectureDetailScreen() {
   };
 
   const transcribe = async () => {
-    const audioParts = lecture.audioParts?.length ? lecture.audioParts : lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds }] : [];
-    if (!audioParts.length) return;
+    const parts = lecture.audioParts?.length ? lecture.audioParts : lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds }] : [];
+    if (!parts.length) return;
     if (Platform.OS === "web") { Alert.alert("استخدم التطبيق على الهاتف", "يتطلب رفع التسجيل الحقيقي تجربة الهاتف عبر Expo Go أو نسخة التطبيق المبنية."); return; }
+    const sourceIds = parts.map((part) => part.id);
+    let completedParts = (lecture.transcribedAudioParts ?? []).filter((part) => sourceIds.includes(part.sourceId));
     try {
       const apiBaseUrl = getApiBaseUrl();
       if (!apiBaseUrl) throw new Error("تعذر الوصول إلى خدمة التحويل. افتح التطبيق عبر رمز QR أو تحقق من اتصال الشبكة.");
       setIsTranscribing(true);
-      updateLecture(lecture.id, { transcriptionStatus: "processing", transcriptionProgress: 5, retryReason: undefined });
-      const texts: string[] = [];
-      const mergedSegments: Array<{ id: string; text: string; startSeconds: number; endSeconds: number }> = [];
-      let offsetSeconds = 0;
-      for (let index = 0; index < audioParts.length; index += 1) {
-        const part = audioParts[index];
+      const completedIds = new Set(completedParts.map((part) => part.sourceId));
+      const remainingParts = parts.filter((part) => !completedIds.has(part.id));
+      updateLecture(lecture.id, { transcriptionStatus: "processing", transcriptionProgress: getTranscriptionProgress(completedParts, parts.length), retryReason: undefined });
+      for (let index = 0; index < parts.length; index += 1) {
+        const part = parts[index];
+        if (completedIds.has(part.id)) continue;
         const file = new File(part.uri);
         if (!file.exists) throw new Error(`لم يعد الجزء ${index + 1} من التسجيل متاحاً على الجهاز.`);
         if (file.size > 16 * 1024 * 1024) throw new Error(`الجزء ${index + 1} أكبر من 16 ميغابايت. أنشئ أجزاء أقصر ثم أعد المحاولة.`);
-        updateLecture(lecture.id, { transcriptionProgress: Math.round(8 + (index / audioParts.length) * 84) });
+        const offsetSeconds = parts.slice(0, index).reduce((sum, entry) => sum + entry.durationSeconds, 0);
+        updateLecture(lecture.id, { transcriptionProgress: Math.max(1, Math.round(((completedParts.length + 0.25) / parts.length) * 100)) });
         const response = await fetch(`${apiBaseUrl}/api/lectures/transcribe`, { method: "POST", headers: { "Content-Type": file.type || "audio/m4a" }, body: file });
-        const payload = await response.json() as { text?: string; error?: string; segments?: Array<{ id: string; text: string; startSeconds: number; endSeconds: number }> };
+        const payload = await response.json() as { text?: string; error?: string; segments?: { id: string; text: string; startSeconds: number; endSeconds: number }[] };
         if (!response.ok || !payload.text) throw new Error(payload.error || `تعذر استخراج نص الجزء ${index + 1}.`);
-        texts.push(audioParts.length > 1 ? `الجزء ${index + 1}\n${payload.text}` : payload.text);
-        mergedSegments.push(...(payload.segments ?? []).map((segment) => ({ ...segment, id: `${part.id}-${segment.id}`, startSeconds: segment.startSeconds + offsetSeconds, endSeconds: segment.endSeconds + offsetSeconds })));
-        offsetSeconds += part.durationSeconds;
+        completedParts = mergeTranscribedPart(completedParts, { sourceId: part.id, text: payload.text, segments: (payload.segments ?? []).map((segment) => ({ ...segment, id: `${part.id}-${segment.id}`, startSeconds: segment.startSeconds + offsetSeconds, endSeconds: segment.endSeconds + offsetSeconds })) });
+        const merged = buildMergedTranscript(completedParts, sourceIds);
+        updateLecture(lecture.id, { transcribedAudioParts: completedParts, transcript: merged.transcript, transcriptSegments: merged.segments, transcriptionStatus: "processing", transcriptionProgress: getTranscriptionProgress(completedParts, parts.length), retryReason: undefined });
       }
-      updateLecture(lecture.id, { transcript: texts.join("\n\n"), transcriptSegments: mergedSegments, transcriptionStatus: "completed", transcriptionProgress: 100, summaryStatus: "ready" });
+      const merged = buildMergedTranscript(completedParts, sourceIds);
+      updateLecture(lecture.id, { transcribedAudioParts: completedParts, transcript: merged.transcript, transcriptSegments: merged.segments, transcriptionStatus: "completed", transcriptionProgress: 100, summaryStatus: "ready" });
+      if (!remainingParts.length) Alert.alert("النص جاهز", "كانت جميع أجزاء المحاضرة محوّلة مسبقاً، واكتمل توحيد النتيجة المحلية.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "أعد المحاولة لاحقاً.";
-      updateLecture(lecture.id, { transcriptionStatus: "failed", transcriptionProgress: 0, retryReason: message });
-      Alert.alert("تعذر تحويل التسجيل", message);
+      updateLecture(lecture.id, { transcriptionStatus: "failed", transcriptionProgress: getTranscriptionProgress(completedParts, parts.length), retryReason: message });
+      Alert.alert("توقف التحويل مؤقتاً", `${message}\nلن يعاد رفع الأجزاء الناجحة عند المحاولة التالية.`);
     } finally { setIsTranscribing(false); }
   };
 
@@ -244,7 +249,7 @@ export default function LectureDetailScreen() {
     {failedUploadItem ? <Pressable onPress={retryFailedUpload} style={styles.retryUpload}><MaterialIcons name="refresh" size={18} color={appTheme.warning} /><Text style={styles.retryUploadText}>إعادة محاولة رفع «{failedUploadItem.name}»</Text></Pressable> : null}
 
     <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>النص</Text><StatusPill label={statusText} tone={statusTone} /></View>
-    {lecture.transcript ? <View style={styles.transcriptCard}>{lecture.transcriptSegments?.length ? lecture.transcriptSegments.map((segment) => <Pressable key={segment.id} onPress={() => playTranscriptSegment(segment.startSeconds)} style={({ pressed }) => [styles.segmentLine, pressed && styles.pressed]}><MaterialIcons name="play-circle-outline" size={18} color={appTheme.primary} /><Text style={styles.segmentText}>{segment.text}</Text><Text style={styles.segmentTime}>{formatDuration(Math.floor(segment.startSeconds))}</Text></Pressable>) : <Text style={styles.transcript}>{lecture.transcript}</Text>}</View> : <ActionCard icon="text-snippet" color={appTheme.primary} title={lecture.transcriptionStatus === "failed" ? "تعذر التحويل سابقاً" : "حوّل التسجيل إلى نص"} description={lecture.transcriptionStatus === "failed" ? lecture.retryReason ?? "تحقق من الشبكة ثم أعد المحاولة." : "يُرفع التسجيل عند اختيارك لهذه الخطوة فقط ثم يحفظ النص مع المحاضرة."}>{isTranscribing || lecture.transcriptionStatus === "processing" ? <ProgressNotice progress={lecture.transcriptionProgress ?? 15} label="يجري رفع التسجيل وتحويله" /> : <PrimaryButton label={lecture.transcriptionStatus === "failed" ? "إعادة المحاولة" : "تحويل إلى نص"} icon="text-snippet" onPress={transcribe} />}</ActionCard>}
+    {lecture.transcript ? <><View style={styles.transcriptCard}>{lecture.transcriptSegments?.length ? lecture.transcriptSegments.map((segment) => <Pressable key={segment.id} onPress={() => playTranscriptSegment(segment.startSeconds)} style={({ pressed }) => [styles.segmentLine, pressed && styles.pressed]}><MaterialIcons name="play-circle-outline" size={18} color={appTheme.primary} /><Text style={styles.segmentText}>{segment.text}</Text><Text style={styles.segmentTime}>{formatDuration(Math.floor(segment.startSeconds))}</Text></Pressable>) : <Text style={styles.transcript}>{lecture.transcript}</Text>}</View>{lecture.transcriptionStatus !== "completed" ? <Pressable onPress={transcribe} style={styles.resumeTranscription}><MaterialIcons name="refresh" size={18} color={appTheme.primary} /><Text style={styles.resumeTranscriptionText}>استئناف تحويل الأجزاء المتبقية</Text></Pressable> : null}</> : <ActionCard icon="text-snippet" color={appTheme.primary} title={lecture.transcriptionStatus === "failed" ? "تعذر التحويل سابقاً" : "حوّل التسجيل إلى نص"} description={lecture.transcriptionStatus === "failed" ? lecture.retryReason ?? "تحقق من الشبكة ثم أعد المحاولة." : "يُرفع التسجيل عند اختيارك لهذه الخطوة فقط ثم يحفظ النص مع المحاضرة."}>{isTranscribing || lecture.transcriptionStatus === "processing" ? <ProgressNotice progress={lecture.transcriptionProgress ?? 15} label="يجري رفع التسجيل وتحويله" /> : <PrimaryButton label={lecture.transcriptionStatus === "failed" ? "إعادة المحاولة" : "تحويل إلى نص"} icon="text-snippet" onPress={transcribe} />}</ActionCard>}
 
     {lecture.transcript ? <><View style={styles.sectionHeader}><Text style={styles.sectionTitle}>الملخص الذكي</Text>{lecture.summary ? <StatusPill label="جاهز للمراجعة" tone="success" /> : null}</View>{lecture.summary ? <><SummaryView summary={lecture.summary} /><View style={styles.reviewAction}><PrimaryButton label="إضافة أسئلة إلى المراجعة" icon="style" onPress={createReviewCards} /></View></> : <ActionCard icon="psychology" color={appTheme.violet} title={lecture.summaryStatus === "failed" ? "تعذر التلخيص سابقاً" : "رتّب أهم ما في المحاضرة"} description={lecture.summaryStatus === "failed" ? lecture.retryReason ?? "أعد المحاولة بعد التأكد من الاتصال." : "ينشئ ملخصاً ونقاطاً ومصطلحات وأسئلة مراجعة من النص."}>{summarize.isPending || lecture.summaryStatus === "processing" ? <ProgressNotice progress={lecture.summaryProgress ?? 20} label="يجري إنشاء الملخص الذكي" /> : <PrimaryButton label={lecture.summaryStatus === "failed" ? "إعادة المحاولة" : "إنشاء ملخص"} icon="auto-awesome" onPress={createSummary} />}</ActionCard>}</> : null}
   </ScrollView></ScreenContainer>;
@@ -260,7 +265,7 @@ const styles = StyleSheet.create({
   content: { gap: 17, paddingBottom: 32 }, audioCard: { backgroundColor: appTheme.ink, borderRadius: 25, padding: 19 }, audioTop: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between" }, date: { color: "#CBD5E1", fontSize: 12 }, wave: { alignItems: "center", flexDirection: "row-reverse", gap: 7, height: 68, justifyContent: "center", marginTop: 10 }, waveLine: { backgroundColor: "#A5B4FC", borderRadius: 10, opacity: 0.9, width: 7 }, playRow: { alignItems: "center", flexDirection: "row-reverse", gap: 9, marginBottom: 15 }, duration: { color: "#CBD5E1", fontSize: 11, fontVariant: ["tabular-nums"] }, progressTrack: { backgroundColor: "#334155", borderRadius: 5, flex: 1, height: 5, overflow: "hidden" }, progressFill: { backgroundColor: "#A5B4FC", borderRadius: 5, height: 5 }, playButton: { alignItems: "center", backgroundColor: appTheme.primary, borderRadius: 14, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 47 }, playText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   partTabs: { flexDirection: "row-reverse", gap: 6, marginBottom: 12, overflow: "hidden" }, partTab: { backgroundColor: "#334155", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 }, partTabActive: { backgroundColor: "#E0E7FF" }, partTabText: { color: "#CBD5E1", fontSize: 11, fontWeight: "800" }, partTabTextActive: { color: appTheme.primary }, speedRow: { alignItems: "center", flexDirection: "row-reverse", gap: 6, justifyContent: "center", marginBottom: 12 }, speedLabel: { color: "#CBD5E1", fontSize: 11, fontWeight: "800", marginLeft: 4 }, speedChip: { backgroundColor: "#334155", borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6 }, speedChipActive: { backgroundColor: "#E0E7FF" }, speedChipText: { color: "#CBD5E1", fontSize: 11, fontWeight: "800" }, speedChipTextActive: { color: appTheme.primary }, partLabel: { color: "#CBD5E1", fontSize: 11, marginBottom: 8, textAlign: "center" },
   attachmentsCard: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 19, borderWidth: 1, gap: 11, padding: 14 }, attachmentsHeader: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between" }, attachmentActions: { flexDirection: "row-reverse", gap: 7 }, attachmentAction: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderRadius: 11, flex: 1, gap: 4, justifyContent: "center", minHeight: 57, paddingHorizontal: 3 }, attachmentActionText: { color: appTheme.primary, fontSize: 10, fontWeight: "800", textAlign: "center" }, attachmentRow: { alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 12, flexDirection: "row-reverse", gap: 7, padding: 9 }, attachmentOpen: { alignItems: "center", flex: 1, flexDirection: "row-reverse", gap: 7 }, attachmentTitle: { color: appTheme.ink, flex: 1, fontSize: 12, fontWeight: "700", textAlign: "right" }, attachmentDelete: { alignItems: "center", backgroundColor: appTheme.dangerSoft, borderRadius: 9, height: 29, justifyContent: "center", width: 29 },
-  exportButton: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderColor: "#C7D2FE", borderRadius: 15, borderWidth: 1, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 48 }, exportText: { color: appTheme.primary, fontSize: 14, fontWeight: "800" }, disabled: { opacity: 0.45 }, sectionHeader: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between", marginTop: 3 }, sectionTitle: { color: appTheme.ink, fontSize: 19, fontWeight: "800" }, transcriptCard: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 18, borderWidth: 1, padding: 16 }, transcript: { color: appTheme.ink, fontSize: 15, lineHeight: 27, textAlign: "right" }, segmentLine: { alignItems: "flex-start", borderBottomColor: appTheme.border, borderBottomWidth: 1, flexDirection: "row-reverse", gap: 8, paddingVertical: 10 }, segmentText: { color: appTheme.ink, flex: 1, fontSize: 14, lineHeight: 22, textAlign: "right" }, segmentTime: { color: appTheme.primary, fontSize: 11, fontVariant: ["tabular-nums"], marginTop: 3 }, actionCard: { alignItems: "center", backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 19, borderWidth: 1, gap: 12, padding: 17 }, actionCopy: { alignItems: "flex-end", width: "100%" }, actionTitle: { color: appTheme.ink, fontSize: 16, fontWeight: "800", textAlign: "right" }, actionBody: { color: appTheme.muted, fontSize: 12, lineHeight: 19, textAlign: "right" }, progressNotice: { alignSelf: "stretch", gap: 8 }, progressTrackLight: { backgroundColor: "#E2E8F0", borderRadius: 5, height: 7, overflow: "hidden" }, progressFillLight: { backgroundColor: appTheme.primary, borderRadius: 5, height: 7 }, progressNoticeText: { color: appTheme.primary, fontSize: 12, fontWeight: "700", textAlign: "center" }, reviewAction: { marginTop: -8 },
+  exportButton: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderColor: "#C7D2FE", borderRadius: 15, borderWidth: 1, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 48 }, exportText: { color: appTheme.primary, fontSize: 14, fontWeight: "800" }, disabled: { opacity: 0.45 }, sectionHeader: { alignItems: "center", flexDirection: "row-reverse", justifyContent: "space-between", marginTop: 3 }, sectionTitle: { color: appTheme.ink, fontSize: 19, fontWeight: "800" }, transcriptCard: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 18, borderWidth: 1, padding: 16 }, resumeTranscription: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderColor: "#C7D2FE", borderRadius: 13, borderWidth: 1, flexDirection: "row-reverse", gap: 7, justifyContent: "center", minHeight: 44 }, resumeTranscriptionText: { color: appTheme.primary, fontSize: 13, fontWeight: "800" }, transcript: { color: appTheme.ink, fontSize: 15, lineHeight: 27, textAlign: "right" }, segmentLine: { alignItems: "flex-start", borderBottomColor: appTheme.border, borderBottomWidth: 1, flexDirection: "row-reverse", gap: 8, paddingVertical: 10 }, segmentText: { color: appTheme.ink, flex: 1, fontSize: 14, lineHeight: 22, textAlign: "right" }, segmentTime: { color: appTheme.primary, fontSize: 11, fontVariant: ["tabular-nums"], marginTop: 3 }, actionCard: { alignItems: "center", backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 19, borderWidth: 1, gap: 12, padding: 17 }, actionCopy: { alignItems: "flex-end", width: "100%" }, actionTitle: { color: appTheme.ink, fontSize: 16, fontWeight: "800", textAlign: "right" }, actionBody: { color: appTheme.muted, fontSize: 12, lineHeight: 19, textAlign: "right" }, progressNotice: { alignSelf: "stretch", gap: 8 }, progressTrackLight: { backgroundColor: "#E2E8F0", borderRadius: 5, height: 7, overflow: "hidden" }, progressFillLight: { backgroundColor: appTheme.primary, borderRadius: 5, height: 7 }, progressNoticeText: { color: appTheme.primary, fontSize: 12, fontWeight: "700", textAlign: "center" }, reviewAction: { marginTop: -8 },
   encryptedBackup: { alignItems: "center", backgroundColor: appTheme.successSoft, borderColor: "#99F6E4", borderRadius: 15, borderWidth: 1, flexDirection: "row-reverse", gap: 8, justifyContent: "center", minHeight: 48 }, encryptedBackupText: { color: appTheme.success, fontSize: 14, fontWeight: "800", textAlign: "center" }, uploadControl: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderRadius: 13, flexDirection: "row-reverse", gap: 7, justifyContent: "center", minHeight: 42 }, uploadControlText: { color: appTheme.primary, fontSize: 12, fontWeight: "800" }, retryUpload: { alignItems: "center", backgroundColor: appTheme.warningSoft, borderColor: "#FDE68A", borderRadius: 13, borderWidth: 1, flexDirection: "row-reverse", gap: 7, justifyContent: "center", minHeight: 42 }, retryUploadText: { color: appTheme.warning, fontSize: 12, fontWeight: "800" },
   summaryCard: { backgroundColor: "#F8FAFF", borderColor: "#C7D2FE", borderRadius: 19, borderWidth: 1, gap: 19, padding: 17 }, summaryOverview: { color: appTheme.ink, fontSize: 15, fontWeight: "600", lineHeight: 25, textAlign: "right" }, summaryGroup: { gap: 9 }, summaryHeading: { alignItems: "center", flexDirection: "row-reverse", gap: 7 }, summaryTitle: { color: appTheme.ink, fontSize: 14, fontWeight: "800" }, summaryItem: { alignItems: "flex-start", flexDirection: "row-reverse", gap: 8 }, bullet: { backgroundColor: appTheme.primary, borderRadius: 4, height: 6, marginTop: 8, width: 6 }, summaryItemText: { color: "#334155", flex: 1, fontSize: 13, lineHeight: 20, textAlign: "right" }, tags: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 7 }, tag: { backgroundColor: "#E0E7FF", borderRadius: 99, paddingHorizontal: 10, paddingVertical: 6 }, tagText: { color: appTheme.primary, fontSize: 12, fontWeight: "700" }, pressed: { opacity: 0.75, transform: [{ scale: 0.985 }] },
 });
