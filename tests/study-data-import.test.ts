@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getStudyDataImportPreview, mergeStudyDataImport, parseStudyDataImportJson } from "../lib/study-data-import";
+import { getStudyDataImportPreview, mergeStudyDataImport, parseStudyDataImportJson, replaceStudyDataFromImport } from "../lib/study-data-import";
 import type { StudyStore } from "../lib/study-types";
 
 const baseStore: StudyStore = { years: [{ id: "current-year", title: "الحالية", isActive: true, archived: false, createdAt: "2026" }], terms: [], subjects: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [], syncSettings: { cloudBackupEnabled: false } };
@@ -23,5 +23,13 @@ describe("استيراد بيانات الدراسة", () => {
     const incoming = parseStudyDataImportJson(JSON.stringify({ format: "muhadir-study-data", schemaVersion: 1, data: { years: [], terms: [], subjects: [], lectures: [{ id: "same", subjectId: "missing", section: "theory", title: "مكرر", recordedAt: "2026", durationSeconds: 0, transcriptionStatus: "local", summaryStatus: "local" }, { id: "new", subjectId: "missing", section: "theory", title: "محاضرة", recordedAt: "2026", durationSeconds: 0, transcriptionStatus: "local", summaryStatus: "local" }], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [] } }));
     const current = { ...baseStore, lectures: [{ id: "same", subjectId: "current-year", section: "theory" as const, title: "حالية", recordedAt: "2026", durationSeconds: 0, transcriptionStatus: "local" as const, summaryStatus: "local" as const }] };
     expect(getStudyDataImportPreview(current, incoming, ["lectures"]).lectures).toEqual({ incoming: 2, additions: 0, duplicates: 1, blocked: 1 });
+  });
+
+  it("يستبدل البيانات ويؤرشف المحاضرات التي تحمل وسائط محلية غير موجودة في الملف", () => {
+    const current = { ...baseStore, lectures: [{ id: "local-audio", subjectId: "old", section: "theory" as const, title: "تسجيل محلي", recordedAt: "2026", durationSeconds: 1, audioUri: "file:///voice.m4a", transcriptionStatus: "local" as const, summaryStatus: "local" as const }] };
+    const incoming = parseStudyDataImportJson(JSON.stringify({ format: "muhadir-study-data", schemaVersion: 1, data: { years: [{ id: "year", title: "سنة", isActive: true, archived: false, createdAt: "2026" }], terms: [{ id: "term", yearId: "year", kind: "first", title: "الأول", createdAt: "2026" }], subjects: [{ id: "subject", termId: "term", title: "مادة", color: "#000", hasPracticalSection: false, theoryInstructor: "د", createdAt: "2026" }], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [] } }));
+    const replaced = replaceStudyDataFromImport(current, incoming, "2026-02-01");
+    expect(replaced.years).toHaveLength(1);
+    expect(replaced.lectures[0]).toMatchObject({ id: "local-audio", archivedAt: "2026-02-01", audioUri: "file:///voice.m4a" });
   });
 });

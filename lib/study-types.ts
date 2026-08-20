@@ -31,6 +31,14 @@ export interface Subject {
   createdAt: string;
 }
 
+export interface SubjectTermGoal {
+  subjectId: string;
+  lectureTarget: number;
+  reviewTarget: number;
+  focusMinutesTarget: number;
+  updatedAt: string;
+}
+
 export interface TranscriptSegment {
   id: string;
   text: string;
@@ -175,6 +183,7 @@ export interface SyncSettings {
   weeklyReviewReminderEnabled?: boolean;
   weeklyReviewReminderNotificationIds?: string[];
   weeklyReviewReminderHour?: number;
+  weeklyReviewReminderMinute?: number;
   appearanceMode?: "light" | "dark";
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
@@ -193,6 +202,7 @@ export interface StudyStore {
   years: AcademicYear[];
   terms: AcademicTerm[];
   subjects: Subject[];
+  subjectGoals?: SubjectTermGoal[];
   lectures: Lecture[];
   reviewCards: ReviewCard[];
   reviewLists?: ReviewList[];

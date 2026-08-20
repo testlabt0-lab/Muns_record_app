@@ -46,6 +46,33 @@ export function mergeStudyDataImport(current: StudyStore, incoming: StudyDataImp
   return { ...current, years, terms, subjects, lectures, reviewCards, reviewLists, reviewSessions, reviewChallenges, tasks };
 }
 
+function withoutLocalMedia<T extends StudyStore["lectures"][number]>(lecture: T): T { return { ...lecture, audioUri: undefined, audioParts: [], attachments: [] }; }
+function hasLocalMedia(lecture: StudyStore["lectures"][number]) { return Boolean(lecture.audioUri || lecture.audioParts?.length || lecture.attachments?.length); }
+
+/** يستبدل بيانات الدراسة المؤكدة مع أرشفة المحاضرات المحلية التي تحمل وسائط غير موجودة في الملف. */
+export function replaceStudyDataFromImport(current: StudyStore, incoming: StudyDataImportPayload, archivedAt = new Date().toISOString()): StudyStore {
+  const years = incoming.years;
+  const yearIds = new Set(years.map((item) => item.id));
+  const terms = incoming.terms.filter((item) => yearIds.has(item.yearId));
+  const termIds = new Set(terms.map((item) => item.id));
+  const subjects = incoming.subjects.filter((item) => termIds.has(item.termId));
+  const subjectIds = new Set(subjects.map((item) => item.id));
+  const incomingLectures = incoming.lectures.filter((item) => subjectIds.has(item.subjectId)).map(withoutLocalMedia);
+  const localMediaByLectureId = new Map(current.lectures.filter(hasLocalMedia).map((lecture) => [lecture.id, lecture]));
+  const incomingLectureIds = new Set(incomingLectures.map((item) => item.id));
+  const lectures = [
+    ...incomingLectures.map((lecture) => { const local = localMediaByLectureId.get(lecture.id); return local ? { ...lecture, audioUri: local.audioUri, audioSizeBytes: local.audioSizeBytes, audioParts: local.audioParts, attachments: local.attachments } : lecture; }),
+    ...current.lectures.filter((lecture) => hasLocalMedia(lecture) && !incomingLectureIds.has(lecture.id)).map((lecture) => ({ ...lecture, archivedAt: lecture.archivedAt ?? archivedAt })),
+  ];
+  const lectureIds = new Set(lectures.map((item) => item.id));
+  const reviewCards = incoming.reviewCards.filter((item) => lectureIds.has(item.lectureId));
+  const reviewLists = incoming.reviewLists.filter((item) => item.lectureIds.some((id) => lectureIds.has(id))).map((item) => ({ ...item, lectureIds: item.lectureIds.filter((id) => lectureIds.has(id)), completedLectureIds: item.completedLectureIds.filter((id) => lectureIds.has(id)) }));
+  const reviewSessions = incoming.reviewSessions.map((item) => item.subjectId && !subjectIds.has(item.subjectId) ? { ...item, subjectId: undefined } : item);
+  const reviewChallenges = incoming.reviewChallenges.filter((item) => subjectIds.has(item.subjectId));
+  const tasks = incoming.tasks.map((item) => ({ ...item, subjectId: item.subjectId && subjectIds.has(item.subjectId) ? item.subjectId : undefined, notificationId: undefined, calendarEventId: undefined }));
+  return { ...current, years, terms, subjects, lectures, reviewCards, reviewLists, reviewSessions, reviewChallenges, tasks };
+}
+
 /** يعرض أثراً واضحاً للدمج؛ لا يغير المحتوى ولا يعدّل المعرّفات المتكررة. */
 export function getStudyDataImportPreview(current: StudyStore, incoming: StudyDataImportPayload, selected: StudyDataImportSection[]): StudyDataImportPreviewBySection {
   const choose = (section: StudyDataImportSection) => selected.includes(section);

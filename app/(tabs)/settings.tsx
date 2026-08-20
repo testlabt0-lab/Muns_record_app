@@ -14,7 +14,7 @@ import { appTheme } from "@/lib/app-theme";
 import { useAppLock } from "@/lib/app-lock";
 import { createBackupPayload, parseBackupPayload } from "@/lib/backup-payload";
 import { createStudyDataExportJson } from "@/lib/study-data-export";
-import { importSections, mergeStudyDataImport, parseStudyDataImportJson, type StudyDataImportPayload, type StudyDataImportSection } from "@/lib/study-data-import";
+import { importSections, mergeStudyDataImport, parseStudyDataImportJson, replaceStudyDataFromImport, type StudyDataImportPayload, type StudyDataImportSection } from "@/lib/study-data-import";
 import { useThemeContext } from "@/lib/theme-provider";
 import { formatBytes } from "@/lib/lecture-export-template";
 import { attachmentKindFromMime, persistBase64Attachment } from "@/lib/local-attachments";
@@ -208,6 +208,10 @@ export default function SettingsScreen() {
     if (!pendingImport || !importSelection.length || importingStudyData) return;
     Alert.alert("تأكيد دمج البيانات", "سيُدمج المحتوى الذي اخترته فقط مع بيانات هذا الجهاز. لا تُستبدل المحاضرات الحالية ولا تُستعاد ملفات الصوت أو المرفقات.", [{ text: "إلغاء", style: "cancel" }, { text: "دمج البيانات", onPress: () => void (async () => { setImportingStudyData(true); try { const next = mergeStudyDataImport({ years, terms, subjects, lectures, reviewCards, reviewLists, reviewSessions, reviewChallenges, tasks, syncSettings, backupActivities }, pendingImport, importSelection); replaceStoreFromLocalImport(next); addBackupActivity({ action: "restore", status: "completed", message: `دُمجت بيانات مُحاضِر من «${pendingImportFileName}» محلياً.` }); setPendingImport(null); Alert.alert("تم دمج البيانات", "أضيفت الفئات التي اخترتها إلى بياناتك المحلية."); } catch { Alert.alert("تعذر دمج البيانات", "لم تُغيّر بيانات الجهاز. حاول بملف صادر من مُحاضِر."); } finally { setImportingStudyData(false); } })() }]);
   };
+  const replaceStudyDataImport = () => {
+    if (!pendingImport || importingStudyData) return;
+    Alert.alert("استبدال بيانات الدراسة", "سيُستبدل تنظيم الدراسة والمحاضرات والنصوص والمراجعة والمهام بهذا الملف. لا يمكن التراجع من داخل التطبيق. ستُؤرشف أي محاضرة محلية تحمل ملفات صوت أو مرفقات ولا تظهر في الملف لحماية وسائط جهازك.", [{ text: "إلغاء", style: "cancel" }, { text: "استبدال البيانات", style: "destructive", onPress: () => void (async () => { setImportingStudyData(true); try { const next = replaceStudyDataFromImport({ years, terms, subjects, lectures, reviewCards, reviewLists, reviewSessions, reviewChallenges, tasks, syncSettings, backupActivities }, pendingImport); replaceStoreFromLocalImport(next); addBackupActivity({ action: "restore", status: "completed", message: `استُبدلت بيانات الدراسة من «${pendingImportFileName}» مع أرشفة الوسائط المحلية غير المطابقة.` }); setPendingImport(null); Alert.alert("تم استبدال البيانات", "اعتمد التطبيق البيانات من الملف مع الحفاظ على وسائط جهازك داخل الأرشيف عند الحاجة."); } catch { Alert.alert("تعذر استبدال البيانات", "لم تُغيّر بيانات الجهاز. حاول بملف صادر من مُحاضِر."); } finally { setImportingStudyData(false); } })() }]);
+  };
 
   return (
     <ScreenContainer className="px-5">
@@ -228,7 +232,7 @@ export default function SettingsScreen() {
         <View style={styles.footer}><Text style={styles.footerTitle}>مُحاضِر</Text><Text style={styles.footerText}>دفتر دراسي صوتي يساعدك على حفظ المحاضرة وفهمها ومراجعتها.</Text></View>
       </ScrollView>
       <MediaRestorePicker visible={showMediaPicker} files={encryptedMedia.data ?? []} selectedIds={selectedMediaIds} busy={restoreEncryptedMedia.isPending || deleteEncryptedMedia.isPending} onClose={() => setShowMediaPicker(false)} onToggle={toggleMedia} onToggleAll={toggleAllMedia} onDelete={removeMediaFile} onRestore={() => { setShowMediaPicker(false); void runMediaRestore(selectedMediaIds); }} />
-      <StudyDataImportModal visible={Boolean(pendingImport)} fileName={pendingImportFileName} payload={pendingImport} current={{ years, terms, subjects, lectures, reviewCards, reviewLists, reviewSessions, reviewChallenges, tasks, syncSettings, backupActivities }} selected={importSelection} busy={importingStudyData} onClose={() => setPendingImport(null)} onToggle={toggleImportSection} onApply={applyStudyDataImport} />
+      <StudyDataImportModal visible={Boolean(pendingImport)} fileName={pendingImportFileName} payload={pendingImport} current={{ years, terms, subjects, lectures, reviewCards, reviewLists, reviewSessions, reviewChallenges, tasks, syncSettings, backupActivities }} selected={importSelection} busy={importingStudyData} onClose={() => setPendingImport(null)} onToggle={toggleImportSection} onApply={applyStudyDataImport} onReplace={replaceStudyDataImport} />
     </ScreenContainer>
   );
 }
