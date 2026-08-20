@@ -15,11 +15,11 @@ export default function SubjectDetailScreen() {
   const { subjectId } = useLocalSearchParams<{ subjectId: string }>();
   const { hydrated, getSubject, getLecturesForSubject, lectures, reviewCards, reviewSessions, tasks } = useStudy();
   const [section, setSection] = useState<SubjectSection>("theory");
-  if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   const subject = getSubject(subjectId);
+  const progress = useMemo(() => getSubjectProgress(subjectId, lectures, reviewCards, reviewSessions ?? [], tasks), [lectures, reviewCards, reviewSessions, subjectId, tasks]);
+  if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   if (!subject) return <ScreenContainer className="p-5"><AppHeader title="المادة" action={<IconButton icon="arrow-forward" label="رجوع" onPress={() => router.back()} />} /><EmptyState icon="error-outline" title="لم نجد هذه المادة" description="ارجع إلى قائمة المواد واختر مادة متاحة." /></ScreenContainer>;
   const visibleLectures = getLecturesForSubject(subject.id, section);
-  const progress = useMemo(() => getSubjectProgress(subject.id, lectures, reviewCards, reviewSessions ?? [], tasks), [lectures, reviewCards, reviewSessions, subject.id, tasks]);
   const instructor = section === "practical" ? subject.practicalInstructor : subject.theoryInstructor;
   return (
     <ScreenContainer className="px-5">

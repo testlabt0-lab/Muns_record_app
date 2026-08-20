@@ -15,14 +15,14 @@ export default function YearDetailScreen() {
   const router = useRouter();
   const { yearId } = useLocalSearchParams<{ yearId: string }>();
   const { hydrated, getYear, getTermForYear, addTerm, terms, subjects, lectures, reviewCards, reviewSessions, tasks } = useStudy();
-  if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   const year = getYear(yearId);
+  const statistics = useMemo(() => getYearStatistics({ yearId, terms, subjects, lectures, reviewCards, reviewSessions: reviewSessions ?? [], tasks }), [lectures, reviewCards, reviewSessions, subjects, tasks, terms, yearId]);
+  if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   if (!year) return <ScreenContainer className="p-5"><AppHeader title="السنة الدراسية" action={<IconButton icon="arrow-forward" label="رجوع" onPress={() => router.back()} />} /><EmptyState icon="error-outline" title="لم نجد هذه السنة" description="ارجع إلى قائمة السنوات واختر سنة صالحة." /></ScreenContainer>;
   const openTerm = (kind: TermKind) => {
     const termId = getTermForYear(year.id, kind)?.id ?? addTerm(year.id, kind);
     router.push({ pathname: "/term/[termId]", params: { termId } });
   };
-  const statistics = useMemo(() => getYearStatistics({ yearId: year.id, terms, subjects, lectures, reviewCards, reviewSessions: reviewSessions ?? [], tasks }), [lectures, reviewCards, reviewSessions, subjects, tasks, terms, year.id]);
   return (
     <ScreenContainer className="px-5">
       <AppHeader eyebrow="السنة الدراسية" title={year.title} action={<IconButton icon="arrow-forward" label="رجوع" onPress={() => router.back()} tone="neutral" />} />
