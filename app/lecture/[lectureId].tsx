@@ -10,6 +10,7 @@ import * as ImagePicker from "expo-image-picker";
 import { AppHeader, EmptyState, IconButton, LoadingView, PrimaryButton, StatusPill } from "@/components/study-ui";
 import { getApiBaseUrl, startOAuthLogin } from "@/constants/oauth";
 import { appTheme } from "@/lib/app-theme";
+import { applyDetectedDuration } from "@/lib/audio-duration";
 import { exportLecturePdf } from "@/lib/lecture-export";
 import { attachmentKindFromMime, persistAttachment } from "@/lib/local-attachments";
 import { getAttachmentExtractionError, isImageExtractionSupported } from "@/lib/attachment-extraction";
@@ -31,7 +32,7 @@ export default function LectureDetailScreen() {
   const { hydrated, lectures, getSubject, updateLecture, addReviewCards, reviewCards, addAttachment, removeAttachment, updateAttachment, syncSettings, updateSyncSettings, addBackupActivity } = useStudy();
   const lecture = lectures.find((item) => item.id === lectureId);
   const subject = lecture ? getSubject(lecture.subjectId) : undefined;
-  const audioParts = useMemo(() => lecture?.audioParts?.length ? lecture.audioParts : lecture?.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds }] : [], [lecture]);
+  const audioParts = useMemo(() => lecture?.audioParts?.length ? lecture.audioParts : lecture?.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : [], [lecture]);
   const [activePartIndex, setActivePartIndex] = useState(0);
   const [pendingPlayback, setPendingPlayback] = useState<{ seekSeconds: number; play: boolean } | null>(null);
   const player = useAudioPlayer(audioParts[activePartIndex]?.uri ?? lecture?.audioUri ?? null);
@@ -68,6 +69,11 @@ export default function LectureDetailScreen() {
     setPendingPlayback({ seekSeconds: 0, play: true });
     setActivePartIndex((current) => current + 1);
   }, [activePartIndex, audioParts.length, playerStatus.didJustFinish]);
+  useEffect(() => {
+    if (!lecture) return;
+    const update = applyDetectedDuration(audioParts, activePartIndex, playerStatus.duration);
+    if (update) updateLecture(lecture.id, update);
+  }, [activePartIndex, audioParts, lecture, playerStatus.duration, updateLecture]);
   if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   if (!lecture) return <ScreenContainer className="p-5"><AppHeader title="المحاضرة" action={<IconButton icon="arrow-forward" label="رجوع" onPress={() => router.back()} />} /><EmptyState icon="error-outline" title="لم نجد هذه المحاضرة" description="ارجع إلى المادة واختر محاضرة متاحة." /></ScreenContainer>;
 
