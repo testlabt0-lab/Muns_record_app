@@ -29,7 +29,7 @@ const TAG_TEMPLATES = [{ label: "مهم", color: "#DC2626" }, { label: "امتح
 
 export default function LectureDetailScreen() {
   const router = useRouter();
-  const { lectureId } = useLocalSearchParams<{ lectureId: string }>();
+  const { lectureId, seekSeconds } = useLocalSearchParams<{ lectureId: string; seekSeconds?: string }>();
   const { hydrated, lectures, getSubject, updateLecture, addReviewCards, reviewCards, addAttachment, removeAttachment, updateAttachment, syncSettings, updateSyncSettings, addBackupActivity } = useStudy();
   const lecture = lectures.find((item) => item.id === lectureId);
   const subject = lecture ? getSubject(lecture.subjectId) : undefined;
@@ -53,6 +53,7 @@ export default function LectureDetailScreen() {
   const [tagColor, setTagColor] = useState(TAG_COLORS[0]);
   const [bookmarkLabel, setBookmarkLabel] = useState("");
   const pauseRequested = useRef(false);
+  const appliedSearchSeek = useRef<string | undefined>(undefined);
 
   useEffect(() => { void setAudioModeAsync({ playsInSilentMode: true }); }, []);
   useEffect(() => { player.setPlaybackRate(syncSettings.preferredPlaybackRate ?? 1); setPlaybackRate(syncSettings.preferredPlaybackRate ?? 1); }, [player, syncSettings.preferredPlaybackRate]);
@@ -76,6 +77,22 @@ export default function LectureDetailScreen() {
     const update = applyDetectedDuration(audioParts, activePartIndex, playerStatus.duration);
     if (update) updateLecture(lecture.id, update);
   }, [activePartIndex, audioParts, lecture, playerStatus.duration, updateLecture]);
+  useEffect(() => {
+    const requestedSeconds = Number(seekSeconds);
+    if (!lecture || !seekSeconds || !Number.isFinite(requestedSeconds) || requestedSeconds < 0 || appliedSearchSeek.current === seekSeconds) return;
+    let offset = 0;
+    for (let index = 0; index < audioParts.length; index += 1) {
+      const duration = audioParts[index].durationSeconds;
+      if (requestedSeconds < offset + duration || index === audioParts.length - 1) {
+        player.pause();
+        setPendingPlayback({ seekSeconds: Math.max(0, requestedSeconds - offset), play: true });
+        setActivePartIndex(index);
+        appliedSearchSeek.current = seekSeconds;
+        return;
+      }
+      offset += duration;
+    }
+  }, [audioParts, lecture, player, seekSeconds]);
   if (!hydrated) return <ScreenContainer><LoadingView /></ScreenContainer>;
   if (!lecture) return <ScreenContainer className="p-5"><AppHeader title="المحاضرة" action={<IconButton icon="arrow-forward" label="رجوع" onPress={() => router.back()} />} /><EmptyState icon="error-outline" title="لم نجد هذه المحاضرة" description="ارجع إلى المادة واختر محاضرة متاحة." /></ScreenContainer>;
 
