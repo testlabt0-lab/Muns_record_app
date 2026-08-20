@@ -3,12 +3,12 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { createActiveAcademicYear, deactivateAcademicYears, findOrCreateTerm, normalizeRequiredTitle } from "@/lib/study-domain";
 import { scheduleReview, type ReviewGrade } from "@/lib/review-scheduler";
-import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
+import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, ReviewList, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
 
 const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
-  years: [], terms: [], subjects: [], lectures: [], reviewCards: [], tasks: [], backupActivities: [],
+  years: [], terms: [], subjects: [], lectures: [], reviewCards: [], reviewLists: [], tasks: [], backupActivities: [],
   syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, lastBackupStatus: "idle" },
 };
 
@@ -29,6 +29,9 @@ type StudyContextValue = StudyStore & {
   addAttachment: (lectureId: string, attachment: Omit<LectureAttachment, "id" | "lectureId" | "createdAt">) => string;
   removeAttachment: (lectureId: string, attachmentId: string) => void;
   addReviewCards: (lectureId: string, cards: Array<Pick<ReviewCard, "question" | "answer">>) => void;
+  createReviewList: (title: string, lectureIds: string[]) => string;
+  toggleReviewListLecture: (listId: string, lectureId: string) => void;
+  deleteReviewList: (listId: string) => void;
   reviewCard: (cardId: string, correct: boolean) => void;
   gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;
   addTask: (task: Omit<StudyTask, "id" | "createdAt" | "completed">) => string;
@@ -50,8 +53,8 @@ function makeId(prefix: string) { return `${prefix}-${Date.now()}-${Math.random(
 function normalizeStore(value: Partial<StudyStore>): StudyStore {
   return {
     years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [],
-    lectures: value.lectures?.map((lecture) => ({ ...lecture, attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
-    reviewCards: value.reviewCards ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
+    lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
+    reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [],
     syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, lastBackupStatus: "idle", ...value.syncSettings },
   };
 }
@@ -92,7 +95,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       },
       addLecture: (input) => {
         const id = makeId("lecture");
-        setStore((current) => ({ ...current, lectures: [{ ...input, id, recordedAt: new Date().toISOString(), transcriptionStatus: input.transcriptionStatus ?? "local", summaryStatus: input.summaryStatus ?? "local", attachments: input.attachments ?? [], transcriptSegments: input.transcriptSegments ?? [] }, ...current.lectures] })); return id;
+        setStore((current) => ({ ...current, lectures: [{ ...input, id, recordedAt: new Date().toISOString(), tags: input.tags ?? [], transcriptionStatus: input.transcriptionStatus ?? "local", summaryStatus: input.summaryStatus ?? "local", attachments: input.attachments ?? [], transcriptSegments: input.transcriptSegments ?? [] }, ...current.lectures] })); return id;
       },
       updateLecture: (lectureId, changes) => setStore((current) => ({ ...current, lectures: current.lectures.map((lecture) => lecture.id === lectureId ? { ...lecture, ...changes } : lecture) })),
       deleteLecture: (lectureId) => setStore((current) => ({ ...current, lectures: current.lectures.filter((lecture) => lecture.id !== lectureId), reviewCards: current.reviewCards.filter((card) => card.lectureId !== lectureId) })),
@@ -105,6 +108,9 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       },
       removeAttachment: (lectureId, attachmentId) => setStore((current) => ({ ...current, lectures: current.lectures.map((lecture) => lecture.id === lectureId ? { ...lecture, attachments: (lecture.attachments ?? []).filter((attachment) => attachment.id !== attachmentId) } : lecture) })),
       addReviewCards: (lectureId, cards) => setStore((current) => ({ ...current, reviewCards: [...current.reviewCards, ...cards.map((card) => ({ ...card, id: makeId("review"), lectureId, dueAt: new Date().toISOString(), intervalDays: 1, repetitions: 0 }))] })),
+      createReviewList: (title, lectureIds) => { const id = makeId("review-list"); const normalizedTitle = normalizeRequiredTitle(title, "اسم قائمة المراجعة"); const uniqueLectureIds = Array.from(new Set(lectureIds)); setStore((current) => ({ ...current, reviewLists: [{ id, title: normalizedTitle, lectureIds: uniqueLectureIds, completedLectureIds: [], createdAt: new Date().toISOString() }, ...(current.reviewLists ?? [])] })); return id; },
+      toggleReviewListLecture: (listId, lectureId) => setStore((current) => ({ ...current, reviewLists: (current.reviewLists ?? []).map((list) => list.id !== listId ? list : { ...list, completedLectureIds: list.completedLectureIds.includes(lectureId) ? list.completedLectureIds.filter((id) => id !== lectureId) : [...list.completedLectureIds, lectureId] }) })),
+      deleteReviewList: (listId) => setStore((current) => ({ ...current, reviewLists: (current.reviewLists ?? []).filter((list) => list.id !== listId) })),
       reviewCard: (cardId, correct) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => {
         if (card.id !== cardId) return card;
         return { ...card, ...scheduleReview(card, correct ? "good" : "again") };

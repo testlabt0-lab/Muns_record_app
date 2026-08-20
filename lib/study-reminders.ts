@@ -48,7 +48,7 @@ export async function scheduleWeeklyDigestReminder() {
   const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
   if (permission.status !== "granted") return undefined;
   return Notifications.scheduleNotificationAsync({
-    content: { title: "ملخصك الأسبوعي جاهز", body: "افتح مُحاضِر لمراجعة المحاضرات الجديدة ومساحة التخزين لهذا الأسبوع.", data: { url: "/storage" } },
+    content: { title: "ملخصك الأسبوعي جاهز", body: "افتح مُحاضِر لمراجعة المحاضرات الجديدة والمراجعة والتخزين لهذا الأسبوع.", data: { url: "/weekly-summary" } },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: 1, hour: 19, minute: 0, channelId: "study-weekly" },
   });
 }

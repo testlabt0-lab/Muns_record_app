@@ -65,6 +65,7 @@ export interface Lecture {
   title: string;
   recordedAt: string;
   archivedAt?: string;
+  tags?: string[];
   durationSeconds: number;
   audioUri?: string;
   audioSizeBytes?: number;
@@ -96,6 +97,14 @@ export interface ReviewCard {
   intervalDays: number;
   repetitions: number;
   lastReviewedAt?: string;
+}
+
+export interface ReviewList {
+  id: string;
+  title: string;
+  lectureIds: string[];
+  completedLectureIds: string[];
+  createdAt: string;
 }
 
 export interface StudyTask {
@@ -136,6 +145,7 @@ export interface StudyStore {
   subjects: Subject[];
   lectures: Lecture[];
   reviewCards: ReviewCard[];
+  reviewLists?: ReviewList[];
   tasks: StudyTask[];
   syncSettings: SyncSettings;
   backupActivities?: BackupActivity[];
