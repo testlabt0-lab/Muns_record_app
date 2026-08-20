@@ -174,6 +174,7 @@ export interface SyncSettings {
   weeklyReviewDays?: number[];
   weeklyReviewReminderEnabled?: boolean;
   weeklyReviewReminderNotificationIds?: string[];
+  weeklyReviewReminderHour?: number;
   appearanceMode?: "light" | "dark";
   lastBackupAt?: string;
   lastBackupStatus?: "idle" | "completed" | "failed";
