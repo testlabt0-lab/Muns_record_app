@@ -57,6 +57,7 @@ export default function HomeScreen() {
         </View>
         <QuickLink icon="insights" tone="violet" title="موجز الأسبوع" description="المحاضرات والمراجعة والتخزين في صفحة واحدة" onPress={() => router.push("/weekly-summary")} />
         <QuickLink icon="assignment-late" tone="warning" title="متابعة المواد" description="تعرف على المواد التي تحتاج جلسة قصيرة الآن" onPress={() => router.push("/follow-up" as never)} />
+        <QuickLink icon="fact-check" tone="violet" title="إدارة خطوات المتابعة" description="ابحث في الخطوات المفتوحة والمكتملة وأعد فتح ما يلزم" onPress={() => router.push("/follow-up-steps" as never)} />
         {openFollowUps.length ? <View style={styles.openFollowUps}>
           <View style={styles.openFollowUpsHeader}><Text style={styles.openFollowUpsTitle}>خطوات متابعة مفتوحة</Text><StatusPill label={`${visibleFollowUps.length}/${openFollowUps.length}`} tone="warning" /></View>
           <Text style={styles.weeklyText}>مرتبة بالمتأخر ثم الأقرب استحقاقاً والأولوية.</Text>

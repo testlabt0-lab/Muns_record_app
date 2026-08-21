@@ -34,5 +34,5 @@ function ThemedNavigator() {
     const preferred = normalizeAppearanceMode(syncSettings.appearanceMode);
     if (preferred !== colorScheme) setColorScheme(preferred);
   }, [colorScheme, hydrated, setColorScheme, syncSettings.appearanceMode]);
-  return <><StatusBar style={colorScheme === "dark" ? "light" : "dark"} /><AppLockGate><Stack screenOptions={{ headerShown: false, animation: "slide_from_left" }}><Stack.Screen name="(tabs)" /><Stack.Screen name="year/[yearId]" /><Stack.Screen name="term/[termId]" /><Stack.Screen name="subject/[subjectId]" /><Stack.Screen name="record" options={{ presentation: "modal", animation: "slide_from_bottom" }} /><Stack.Screen name="lecture/[lectureId]" /><Stack.Screen name="storage" /></Stack></AppLockGate></>;
+  return <><StatusBar style={colorScheme === "dark" ? "light" : "dark"} /><AppLockGate><Stack screenOptions={{ headerShown: false, animation: "slide_from_left" }}><Stack.Screen name="(tabs)" /><Stack.Screen name="year/[yearId]" /><Stack.Screen name="term/[termId]" /><Stack.Screen name="subject/[subjectId]" /><Stack.Screen name="record" options={{ presentation: "modal", animation: "slide_from_bottom" }} /><Stack.Screen name="lecture/[lectureId]" /><Stack.Screen name="storage" /><Stack.Screen name="follow-up-steps" /></Stack></AppLockGate></>;
 }
