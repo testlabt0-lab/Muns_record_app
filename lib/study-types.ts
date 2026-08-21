@@ -61,6 +61,7 @@ export interface WeeklyReflection {
   followUpPriority?: FollowUpPriority;
   followUpDueAt?: string;
   followUpSubjectId?: string;
+  followUpRepeatsWeekly?: boolean;
   updatedAt: string;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeWeeklyReflection } from "../lib/weekly-reflection";
+import { createNextWeeklyFollowUpRepeat, normalizeWeeklyReflection } from "../lib/weekly-reflection";
 
 describe("الملاحظة الختامية للأسبوع", () => {
   it("ينظف النص ويحده بالألف حرف قبل الحفظ", () => {
@@ -17,4 +17,6 @@ describe("الملاحظة الختامية للأسبوع", () => {
   });
   it("يحفظ أولوية واستحقاق هدف المتابعة عند وجوده", () => { const value = normalizeWeeklyReflection("2026-01-05", "تقدم", { followUpGoal: "خطوة", followUpPriority: "high", followUpDueAt: "2026-01-09" }, "x"); expect(value.followUpPriority).toBe("high"); expect(value.followUpDueAt).toBe("2026-01-09"); });
   it("يربط هدف المتابعة بمعرف مادة صالح", () => { const value = normalizeWeeklyReflection("2026-01-05", "تقدم", { followUpGoal: "خطوة", followUpSubjectId: "subject-1" }, "x"); expect(value.followUpSubjectId).toBe("subject-1"); });
+  it("يحفظ خيار التكرار الأسبوعي للهدف الموجود", () => { const value = normalizeWeeklyReflection("2026-01-05", "تقدم", { followUpGoal: "خطوة", followUpRepeatsWeekly: true }, "x"); expect(value.followUpRepeatsWeekly).toBe(true); });
+  it("ينشئ نسخة أسبوعية جديدة بلا استحقاق قديم للهدف المتكرر", () => { const value = normalizeWeeklyReflection("2026-01-05", "تقدم", { followUpGoal: "خطوة", followUpPriority: "high", followUpDueAt: "2026-01-08", followUpRepeatsWeekly: true }, "x"); const next = createNextWeeklyFollowUpRepeat(value); expect(next).toMatchObject({ weekStart: "2026-01-12", followUpGoal: "خطوة", followUpPriority: "high", followUpRepeatsWeekly: true }); expect(next?.followUpDueAt).toBeUndefined(); });
 });

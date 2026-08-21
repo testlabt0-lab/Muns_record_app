@@ -6,7 +6,7 @@ import { scheduleReview, type ReviewGrade } from "@/lib/review-scheduler";
 import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, ReviewList, ReviewSession, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
 import { normalizeSubjectTermGoalTargets } from "@/lib/subject-term-goals";
 import { getWeekStartIso, normalizeWeeklyGoalTargets } from "@/lib/subject-weekly-goals";
-import { normalizeWeeklyReflection } from "@/lib/weekly-reflection";
+import { createNextWeeklyFollowUpRepeat, normalizeWeeklyReflection } from "@/lib/weekly-reflection";
 import { createReplacementSnapshot, restoreReplacementSnapshot as restoreSnapshot } from "@/lib/replacement-history";
 
 const STORE_KEY = "muhadir.study-store.v1";
@@ -44,7 +44,7 @@ type StudyContextValue = StudyStore & {
   setSubjectWeeklyGoal: (subjectId: string, targets: { reviewTarget: number; focusMinutesTarget: number; lateReminderThresholdPercent?: number }) => void;
   markSubjectWeeklyGoalLateReminder: (subjectId: string, weekStart: string) => void;
   replaceSubjectGoalSettings: (subjectGoals: StudyStore["subjectGoals"], weeklySubjectGoals: StudyStore["weeklySubjectGoals"]) => void;
-  saveWeeklyReflection: (weekStart: string, note: string, attributes?: { rating?: 1 | 2 | 3 | 4 | 5; focusAreas?: import("@/lib/study-types").ReflectionFocusArea[]; followUpGoal?: string; followUpCompleted?: boolean; followUpCompletedAt?: string; followUpPriority?: import("@/lib/study-types").FollowUpPriority; followUpDueAt?: string; followUpSubjectId?: string }) => void;
+  saveWeeklyReflection: (weekStart: string, note: string, attributes?: { rating?: 1 | 2 | 3 | 4 | 5; focusAreas?: import("@/lib/study-types").ReflectionFocusArea[]; followUpGoal?: string; followUpCompleted?: boolean; followUpCompletedAt?: string; followUpPriority?: import("@/lib/study-types").FollowUpPriority; followUpDueAt?: string; followUpSubjectId?: string; followUpRepeatsWeekly?: boolean }) => void;
   markSubjectGoalNearReminder: (subjectId: string) => void;
   reviewCard: (cardId: string, correct: boolean) => void;
   gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;
@@ -136,7 +136,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       setSubjectWeeklyGoal: (subjectId, targets) => { if (!store.subjects.some((subject) => subject.id === subjectId)) throw new Error("المادة غير موجودة"); const normalized = normalizeWeeklyGoalTargets(targets); const weekStart = getWeekStartIso(); setStore((current) => ({ ...current, weeklySubjectGoals: [{ subjectId, weekStart, ...normalized, updatedAt: new Date().toISOString(), lateReminderNotifiedAt: undefined }, ...(current.weeklySubjectGoals ?? []).filter((goal) => !(goal.subjectId === subjectId && goal.weekStart === weekStart))] })); },
       markSubjectWeeklyGoalLateReminder: (subjectId, weekStart) => setStore((current) => ({ ...current, weeklySubjectGoals: (current.weeklySubjectGoals ?? []).map((goal) => goal.subjectId === subjectId && goal.weekStart === weekStart ? { ...goal, lateReminderNotifiedAt: new Date().toISOString() } : goal) })),
       replaceSubjectGoalSettings: (subjectGoals, weeklySubjectGoals) => setStore((current) => ({ ...current, subjectGoals: subjectGoals ?? [], weeklySubjectGoals: weeklySubjectGoals ?? [] })),
-      saveWeeklyReflection: (weekStart, note, attributes) => setStore((current) => ({ ...current, weeklyReflections: [normalizeWeeklyReflection(weekStart, note, attributes), ...(current.weeklyReflections ?? []).filter((reflection) => reflection.weekStart !== weekStart)] })),
+      saveWeeklyReflection: (weekStart, note, attributes) => setStore((current) => { const saved = normalizeWeeklyReflection(weekStart, note, attributes); const remaining = (current.weeklyReflections ?? []).filter((reflection) => reflection.weekStart !== weekStart); const nextRepeat = createNextWeeklyFollowUpRepeat(saved); const alreadyExists = Boolean(nextRepeat && remaining.some((reflection) => reflection.weekStart === nextRepeat.weekStart)); return { ...current, weeklyReflections: [saved, ...(nextRepeat && !alreadyExists ? [nextRepeat] : []), ...remaining] }; }),
       markSubjectGoalNearReminder: (subjectId) => setStore((current) => ({ ...current, subjectGoals: (current.subjectGoals ?? []).map((goal) => goal.subjectId === subjectId ? { ...goal, nearGoalReminderNotifiedAt: new Date().toISOString() } : goal) })),
       reviewCard: (cardId, correct) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => {
         if (card.id !== cardId) return card;
