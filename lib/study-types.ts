@@ -53,8 +53,12 @@ export interface SubjectWeeklyGoal {
 export interface WeeklyReflection {
   weekStart: string;
   note: string;
+  rating?: 1 | 2 | 3 | 4 | 5;
+  focusAreas?: ReflectionFocusArea[];
   updatedAt: string;
 }
+
+export type ReflectionFocusArea = "review" | "organization" | "focus" | "wellbeing";
 
 export interface TranscriptSegment {
   id: string;

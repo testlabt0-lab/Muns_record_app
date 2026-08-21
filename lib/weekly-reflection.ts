@@ -1,3 +1,7 @@
-import type { WeeklyReflection } from "./study-types";
+import type { ReflectionFocusArea, WeeklyReflection } from "./study-types";
 
-export function normalizeWeeklyReflection(weekStart: string, note: string, updatedAt = new Date().toISOString()): WeeklyReflection { return { weekStart, note: note.trim().slice(0, 1000), updatedAt }; }
+export const REFLECTION_FOCUS_AREAS: { id: ReflectionFocusArea; label: string }[] = [{ id: "review", label: "المراجعة" }, { id: "organization", label: "التنظيم" }, { id: "focus", label: "التركيز" }, { id: "wellbeing", label: "التوازن" }];
+function normalizeRating(value: unknown): WeeklyReflection["rating"] { return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5 ? value as WeeklyReflection["rating"] : undefined; }
+function normalizeFocusAreas(values: unknown): ReflectionFocusArea[] { const valid = new Set(REFLECTION_FOCUS_AREAS.map((area) => area.id)); return Array.isArray(values) ? Array.from(new Set(values.filter((value): value is ReflectionFocusArea => typeof value === "string" && valid.has(value as ReflectionFocusArea)))).slice(0, 4) : []; }
+
+export function normalizeWeeklyReflection(weekStart: string, note: string, attributesOrUpdatedAt: Partial<Pick<WeeklyReflection, "rating" | "focusAreas">> | string = {}, updatedAt = new Date().toISOString()): WeeklyReflection { const attributes = typeof attributesOrUpdatedAt === "string" ? {} : attributesOrUpdatedAt; const timestamp = typeof attributesOrUpdatedAt === "string" ? attributesOrUpdatedAt : updatedAt; return { weekStart, note: note.trim().slice(0, 1000), rating: normalizeRating(attributes.rating), focusAreas: normalizeFocusAreas(attributes.focusAreas), updatedAt: timestamp }; }
