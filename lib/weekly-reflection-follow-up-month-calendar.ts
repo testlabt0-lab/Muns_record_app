@@ -1,0 +1,4 @@
+import type { OpenFollowUpItem } from "./weekly-reflection-follow-up-list";
+
+function dateKey(date: Date) { return date.toISOString().slice(0, 10); }
+export function getFollowUpMonthCalendar(items: OpenFollowUpItem[], month: Date) { const firstDay = new Date(month.getFullYear(), month.getMonth(), 1); const gridStart = new Date(firstDay); gridStart.setDate(gridStart.getDate() - gridStart.getDay()); const cells = Array.from({ length: 42 }, (_, index) => { const date = new Date(gridStart); date.setDate(date.getDate() + index); const key = dateKey(date); return { date: key, day: date.getDate(), isCurrentMonth: date.getMonth() === firstDay.getMonth(), items: items.filter((item) => item.followUpDueAt === key) }; }); return { label: firstDay.toLocaleDateString("ar", { month: "long", year: "numeric" }), cells }; }
