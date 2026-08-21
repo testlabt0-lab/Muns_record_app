@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getFollowUpManagerCounts, getManagedFollowUpItems, getReopenedFollowUpAttributes, normalizeFollowUpManagerAssignment, normalizeFollowUpManagerEdit } from "../lib/weekly-reflection-follow-up-manager";
+import { getBatchFollowUpPostponeDate, getFollowUpManagerCounts, getManagedFollowUpItems, getReopenedFollowUpAttributes, getSelectedOpenFollowUpItems, normalizeFollowUpManagerAssignment, normalizeFollowUpManagerEdit } from "../lib/weekly-reflection-follow-up-manager";
 
 describe("قائمة إدارة خطوات المتابعة", () => {
   const reflections = [
@@ -35,5 +35,21 @@ describe("قائمة إدارة خطوات المتابعة", () => {
     expect(getManagedFollowUpItems(reflections, "", "all", now, "smart", "unlinked", "all").map((item) => item.followUpGoal)).toEqual(["خطوة مكتملة"]);
     expect(normalizeFollowUpManagerAssignment("subject-3", "high")).toEqual({ followUpSubjectId: "subject-3", followUpPriority: "high" });
     expect(normalizeFollowUpManagerAssignment("", "invalid")).toEqual({ followUpSubjectId: undefined, followUpPriority: "medium" });
+  });
+
+  it("يصفّي الاستحقاقات ويحدد المفتوح للتنفيذ الجماعي ويحسب التأجيل", () => {
+    const dated = [
+      ...reflections,
+      { weekStart: "2026-08-24", note: "", followUpGoal: "اليوم", followUpDueAt: "2026-08-21", updatedAt: "x" },
+      { weekStart: "2026-08-31", note: "", followUpGoal: "هذا الأسبوع", followUpDueAt: "2026-08-26", updatedAt: "x" },
+      { weekStart: "2026-09-07", note: "", followUpGoal: "لاحقاً", followUpDueAt: "2026-09-01", updatedAt: "x" },
+    ];
+    const now = new Date("2026-08-21T12:00:00.000Z");
+    expect(getManagedFollowUpItems(dated, "", "open", now, "smart", "all", "all", "today").map((item) => item.followUpGoal)).toEqual(["اليوم"]);
+    expect(getManagedFollowUpItems(dated, "", "open", now, "smart", "all", "all", "week").map((item) => item.followUpGoal)).toContain("هذا الأسبوع");
+    const all = getManagedFollowUpItems(dated, "", "all", now);
+    expect(getSelectedOpenFollowUpItems(all, ["2026-08-10", "2026-08-17"]).map((item) => item.followUpGoal)).toEqual(["خطوة عالية"]);
+    expect(getBatchFollowUpPostponeDate("2026-08-21", 3, now)).toBe("2026-08-24");
+    expect(getBatchFollowUpPostponeDate(undefined, 7, now)).toBe("2026-08-28");
   });
 });
