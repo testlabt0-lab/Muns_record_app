@@ -205,6 +205,8 @@ export interface SyncSettings {
   weeklyReflectionReminderMinute?: number;
   weeklyReflectionFollowUpReminderEnabled?: boolean;
   weeklyReflectionFollowUpReminderNotificationId?: string;
+  weeklyReflectionFollowUpDueReminderEnabled?: boolean;
+  weeklyReflectionFollowUpDueReminderNotificationId?: string;
   weeklyLectureGoal?: number;
   weeklyReviewGoal?: number;
   weeklyGoalNotificationEnabled?: boolean;
