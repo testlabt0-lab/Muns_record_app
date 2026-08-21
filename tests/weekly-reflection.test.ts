@@ -10,4 +10,9 @@ describe("الملاحظة الختامية للأسبوع", () => {
     const value = normalizeWeeklyReflection("2026-01-05", "تقدم جيد", { rating: 4, focusAreas: ["focus", "review", "غير معروف" as never] }, "x");
     expect(value.rating).toBe(4); expect(value.focusAreas).toEqual(["focus", "review"]);
   });
+  it("يحفظ هدف متابعة قصيراً ولا يسمح بإتمام هدف فارغ", () => {
+    const completed = normalizeWeeklyReflection("2026-01-05", "تقدم", { followUpGoal: "مراجعة الفصل الأول", followUpCompleted: true }, "x");
+    const empty = normalizeWeeklyReflection("2026-01-05", "تقدم", { followUpCompleted: true }, "x");
+    expect(completed.followUpCompleted).toBe(true); expect(completed.followUpCompletedAt).toBe("x"); expect(empty.followUpCompleted).toBe(false);
+  });
 });

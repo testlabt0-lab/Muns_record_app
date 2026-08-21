@@ -13,7 +13,7 @@ const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
   years: [], terms: [], subjects: [], subjectGoals: [], weeklySubjectGoals: [], weeklyReflections: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [], replacementSnapshots: [],
-  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyReflectionReminderEnabled: false, weeklyReflectionReminderHour: 20, weeklyReflectionReminderMinute: 0, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, weeklyReviewReminderHour: 18, weeklyReviewReminderMinute: 0, appearanceMode: "light", lastBackupStatus: "idle" },
+  syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyReflectionReminderEnabled: false, weeklyReflectionReminderHour: 20, weeklyReflectionReminderMinute: 0, weeklyReflectionFollowUpReminderEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, weeklyReviewReminderHour: 18, weeklyReviewReminderMinute: 0, appearanceMode: "light", lastBackupStatus: "idle" },
 };
 
 type AddSubjectInput = { title: string; color: string; hasPracticalSection: boolean; theoryInstructor: string; practicalInstructor?: string };
@@ -44,7 +44,7 @@ type StudyContextValue = StudyStore & {
   setSubjectWeeklyGoal: (subjectId: string, targets: { reviewTarget: number; focusMinutesTarget: number; lateReminderThresholdPercent?: number }) => void;
   markSubjectWeeklyGoalLateReminder: (subjectId: string, weekStart: string) => void;
   replaceSubjectGoalSettings: (subjectGoals: StudyStore["subjectGoals"], weeklySubjectGoals: StudyStore["weeklySubjectGoals"]) => void;
-  saveWeeklyReflection: (weekStart: string, note: string, attributes?: { rating?: 1 | 2 | 3 | 4 | 5; focusAreas?: import("@/lib/study-types").ReflectionFocusArea[] }) => void;
+  saveWeeklyReflection: (weekStart: string, note: string, attributes?: { rating?: 1 | 2 | 3 | 4 | 5; focusAreas?: import("@/lib/study-types").ReflectionFocusArea[]; followUpGoal?: string; followUpCompleted?: boolean; followUpCompletedAt?: string }) => void;
   markSubjectGoalNearReminder: (subjectId: string) => void;
   reviewCard: (cardId: string, correct: boolean) => void;
   gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;

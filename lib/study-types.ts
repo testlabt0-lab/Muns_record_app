@@ -55,6 +55,9 @@ export interface WeeklyReflection {
   note: string;
   rating?: 1 | 2 | 3 | 4 | 5;
   focusAreas?: ReflectionFocusArea[];
+  followUpGoal?: string;
+  followUpCompleted?: boolean;
+  followUpCompletedAt?: string;
   updatedAt: string;
 }
 
@@ -197,6 +200,8 @@ export interface SyncSettings {
   weeklyReflectionReminderNotificationId?: string;
   weeklyReflectionReminderHour?: number;
   weeklyReflectionReminderMinute?: number;
+  weeklyReflectionFollowUpReminderEnabled?: boolean;
+  weeklyReflectionFollowUpReminderNotificationId?: string;
   weeklyLectureGoal?: number;
   weeklyReviewGoal?: number;
   weeklyGoalNotificationEnabled?: boolean;

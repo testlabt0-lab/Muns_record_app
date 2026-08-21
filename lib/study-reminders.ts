@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { getUpcomingFollowUpReminderDate } from "./weekly-reflection-follow-up-reminder";
 import { normalizeWeeklyReviewDays } from "./review-plan-reminders";
 
 Notifications.setNotificationHandler({
@@ -120,6 +121,9 @@ export async function scheduleWeeklyReflectionReminder(hour = 20, minute = 0) {
 }
 
 export async function cancelWeeklyReflectionReminder(notificationId?: string) { if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId); }
+
+export async function scheduleWeeklyReflectionFollowUpReminder(goal: string) { if (Platform.OS === "web") return undefined; if (Platform.OS === "android") await Notifications.setNotificationChannelAsync("study-follow-up", { name: "متابعة الأهداف", importance: Notifications.AndroidImportance.DEFAULT }); const current = await Notifications.getPermissionsAsync(); const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync(); if (permission.status !== "granted") return undefined; return Notifications.scheduleNotificationAsync({ content: { title: "هل أنجزت خطوتك الصغيرة؟", body: goal, data: { url: "/weekly-summary" } }, trigger: { date: getUpcomingFollowUpReminderDate(), channelId: "study-follow-up" } }); }
+export async function cancelWeeklyReflectionFollowUpReminder(notificationId?: string) { if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId); }
 
 export async function scheduleDailyFocusReminder() {
   if (Platform.OS === "web") return undefined;
