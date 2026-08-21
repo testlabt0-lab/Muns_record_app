@@ -58,10 +58,13 @@ export interface WeeklyReflection {
   followUpGoal?: string;
   followUpCompleted?: boolean;
   followUpCompletedAt?: string;
+  followUpPriority?: FollowUpPriority;
+  followUpDueAt?: string;
   updatedAt: string;
 }
 
 export type ReflectionFocusArea = "review" | "organization" | "focus" | "wellbeing";
+export type FollowUpPriority = "high" | "medium" | "low";
 
 export interface TranscriptSegment {
   id: string;

@@ -1,0 +1,4 @@
+import { describe, expect, it } from "vitest";
+import { getOpenFollowUpItems } from "../lib/weekly-reflection-follow-up-list";
+
+describe("قائمة خطوات المتابعة المفتوحة", () => { it("ترتب المتأخر ثم الأقرب استحقاقاً ثم الأعلى أولوية", () => { const items = getOpenFollowUpItems([{ weekStart: "2026-01-05", note: "أ", followUpGoal: "منخفض", followUpPriority: "low", updatedAt: "x" }, { weekStart: "2026-01-12", note: "ب", followUpGoal: "متأخر", followUpDueAt: "2026-01-05", updatedAt: "x" }, { weekStart: "2026-01-19", note: "ج", followUpGoal: "قريب", followUpDueAt: "2026-01-21", followUpPriority: "high", updatedAt: "x" }], new Date("2026-01-20T10:00:00Z")); expect(items.map((item) => item.followUpGoal)).toEqual(["متأخر", "قريب", "منخفض"]); }); });

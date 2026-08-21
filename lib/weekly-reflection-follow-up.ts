@@ -1,0 +1,7 @@
+import type { FollowUpPriority } from "./study-types";
+
+export const FOLLOW_UP_PRIORITIES: { id: FollowUpPriority; label: string }[] = [{ id: "high", label: "عالية" }, { id: "medium", label: "متوسطة" }, { id: "low", label: "منخفضة" }];
+export function normalizeFollowUpPriority(value: unknown): FollowUpPriority { return value === "high" || value === "low" || value === "medium" ? value : "medium"; }
+function asDateKey(date: Date) { return date.toISOString().slice(0, 10); }
+export function getFollowUpDueOptions(now = new Date()) { const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1); const endOfWeek = new Date(now); endOfWeek.setDate(endOfWeek.getDate() + ((0 - endOfWeek.getDay() + 7) % 7 || 7)); const nextWednesday = new Date(now); nextWednesday.setDate(nextWednesday.getDate() + ((3 - nextWednesday.getDay() + 7) % 7 || 7)); return [{ dueAt: undefined, label: "دون تاريخ" }, { dueAt: asDateKey(tomorrow), label: "غداً" }, { dueAt: asDateKey(endOfWeek), label: "نهاية الأسبوع" }, { dueAt: asDateKey(nextWednesday), label: "الأربعاء القادم" }]; }
+export function normalizeFollowUpDueAt(value: unknown) { return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined; }
