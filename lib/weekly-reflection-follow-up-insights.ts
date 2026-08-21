@@ -1,0 +1,4 @@
+import type { WeeklyReflection } from "./study-types";
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+export function getFollowUpCompletionInsights(reflections: WeeklyReflection[]) { const completed = reflections.filter((reflection) => reflection.followUpGoal && reflection.followUpCompleted); const weeks = Array.from(new Set(completed.map((reflection) => reflection.weekStart))).sort().reverse(); let currentWeeklyStreak = 0; let bestWeeklyStreak = 0; let run = 0; let previous: number | undefined; for (const week of weeks) { const value = new Date(`${week}T00:00:00`).getTime(); if (previous !== undefined && previous - value === WEEK_MS) run += 1; else run = 1; bestWeeklyStreak = Math.max(bestWeeklyStreak, run); if (previous === undefined || currentWeeklyStreak === run) currentWeeklyStreak = run; previous = value; } return { completedCount: completed.length, completionWeekCount: weeks.length, currentWeeklyStreak, bestWeeklyStreak }; }
