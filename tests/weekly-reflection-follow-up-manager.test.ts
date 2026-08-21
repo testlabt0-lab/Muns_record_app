@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getFollowUpManagerCounts, getManagedFollowUpItems, getReopenedFollowUpAttributes, normalizeFollowUpManagerEdit } from "../lib/weekly-reflection-follow-up-manager";
+import { getFollowUpManagerCounts, getManagedFollowUpItems, getReopenedFollowUpAttributes, normalizeFollowUpManagerAssignment, normalizeFollowUpManagerEdit } from "../lib/weekly-reflection-follow-up-manager";
 
 describe("قائمة إدارة خطوات المتابعة", () => {
   const reflections = [
-    { weekStart: "2026-08-03", note: "ملاحظة اختبار", followUpGoal: "خطوة متأخرة", followUpDueAt: "2026-08-10", followUpPriority: "low" as const, updatedAt: "x" },
-    { weekStart: "2026-08-10", note: "", followUpGoal: "خطوة عالية", followUpDueAt: "2026-08-25", followUpPriority: "high" as const, updatedAt: "x" },
+    { weekStart: "2026-08-03", note: "ملاحظة اختبار", followUpGoal: "خطوة متأخرة", followUpDueAt: "2026-08-10", followUpPriority: "low" as const, followUpSubjectId: "subject-1", updatedAt: "x" },
+    { weekStart: "2026-08-10", note: "", followUpGoal: "خطوة عالية", followUpDueAt: "2026-08-25", followUpPriority: "high" as const, followUpSubjectId: "subject-2", updatedAt: "x" },
     { weekStart: "2026-08-17", note: "تلخيص فصل", followUpGoal: "خطوة مكتملة", followUpCompleted: true, followUpCompletedAt: "2026-08-22T12:00:00.000Z", followUpPriority: "medium" as const, updatedAt: "x" },
   ];
 
@@ -26,5 +26,14 @@ describe("قائمة إدارة خطوات المتابعة", () => {
     expect(getManagedFollowUpItems(reflections, "", "open", new Date("2026-08-21T12:00:00.000Z"), "due").map((item) => item.followUpGoal)).toEqual(["خطوة متأخرة", "خطوة عالية"]);
     expect(normalizeFollowUpManagerEdit("  عنوان معدّل  ", "2026-09-01")).toEqual({ followUpGoal: "عنوان معدّل", followUpDueAt: "2026-09-01" });
     expect(normalizeFollowUpManagerEdit("   ", "2026-09-01")).toBeUndefined();
+  });
+
+  it("يصفّي حسب المادة والأولوية ويطبّع تعديل التعيين", () => {
+    const now = new Date("2026-08-21T12:00:00.000Z");
+    expect(getManagedFollowUpItems(reflections, "", "all", now, "smart", "subject-1", "all").map((item) => item.followUpGoal)).toEqual(["خطوة متأخرة"]);
+    expect(getManagedFollowUpItems(reflections, "", "all", now, "smart", "all", "high").map((item) => item.followUpGoal)).toEqual(["خطوة عالية"]);
+    expect(getManagedFollowUpItems(reflections, "", "all", now, "smart", "unlinked", "all").map((item) => item.followUpGoal)).toEqual(["خطوة مكتملة"]);
+    expect(normalizeFollowUpManagerAssignment("subject-3", "high")).toEqual({ followUpSubjectId: "subject-3", followUpPriority: "high" });
+    expect(normalizeFollowUpManagerAssignment("", "invalid")).toEqual({ followUpSubjectId: undefined, followUpPriority: "medium" });
   });
 });

@@ -1,10 +1,12 @@
 import type { FollowUpPriority, WeeklyReflection } from "./study-types";
-import { normalizeFollowUpDueAt } from "./weekly-reflection-follow-up";
+import { normalizeFollowUpDueAt, normalizeFollowUpPriority } from "./weekly-reflection-follow-up";
 
 const priorityWeight = { high: 0, medium: 1, low: 2 } as const;
 
 export type FollowUpManagerStatus = "all" | "open" | "completed";
 export type FollowUpManagerSort = "smart" | "recent" | "priority" | "due";
+export type FollowUpManagerSubjectFilter = "all" | "unlinked" | string;
+export type FollowUpManagerPriorityFilter = "all" | FollowUpPriority;
 export type ManagedFollowUpItem = WeeklyReflection & { status: Exclude<FollowUpManagerStatus, "all">; isOverdue: boolean };
 
 function normalizeSearch(value: string) {
@@ -24,13 +26,16 @@ function compareManagedFollowUps(first: ManagedFollowUpItem, second: ManagedFoll
   return Number(second.isOverdue) - Number(first.isOverdue) || (first.followUpDueAt ?? "9999-12-31").localeCompare(second.followUpDueAt ?? "9999-12-31") || priorityWeight[first.followUpPriority ?? "medium"] - priorityWeight[second.followUpPriority ?? "medium"] || second.weekStart.localeCompare(first.weekStart);
 }
 
-export function getManagedFollowUpItems(reflections: WeeklyReflection[], query = "", status: FollowUpManagerStatus = "all", now = new Date(), sort: FollowUpManagerSort = "smart"): ManagedFollowUpItem[] {
+export function getManagedFollowUpItems(reflections: WeeklyReflection[], query = "", status: FollowUpManagerStatus = "all", now = new Date(), sort: FollowUpManagerSort = "smart", subjectFilter: FollowUpManagerSubjectFilter = "all", priorityFilter: FollowUpManagerPriorityFilter = "all"): ManagedFollowUpItem[] {
   const normalizedQuery = normalizeSearch(query);
   const today = now.toISOString().slice(0, 10);
   return reflections.filter((reflection) => {
     if (!reflection.followUpGoal) return false;
     const itemStatus = reflection.followUpCompleted ? "completed" : "open";
     if (status !== "all" && itemStatus !== status) return false;
+    if (subjectFilter === "unlinked" && reflection.followUpSubjectId) return false;
+    if (subjectFilter !== "all" && subjectFilter !== "unlinked" && reflection.followUpSubjectId !== subjectFilter) return false;
+    if (priorityFilter !== "all" && (reflection.followUpPriority ?? "medium") !== priorityFilter) return false;
     return !normalizedQuery || `${reflection.followUpGoal} ${reflection.note}`.toLocaleLowerCase("ar").includes(normalizedQuery);
   }).map((reflection) => ({ ...reflection, status: reflection.followUpCompleted ? "completed" as const : "open" as const, isOverdue: Boolean(!reflection.followUpCompleted && reflection.followUpDueAt && reflection.followUpDueAt < today) })).sort((first, second) => compareManagedFollowUps(first, second, sort));
 }
@@ -57,4 +62,8 @@ export function normalizeFollowUpManagerEdit(title: string, dueAt: unknown) {
   const followUpGoal = title.trim();
   if (!followUpGoal) return undefined;
   return { followUpGoal, followUpDueAt: normalizeFollowUpDueAt(dueAt) };
+}
+
+export function normalizeFollowUpManagerAssignment(subjectId: unknown, priority: unknown) {
+  return { followUpSubjectId: typeof subjectId === "string" && subjectId.trim() ? subjectId : undefined, followUpPriority: normalizeFollowUpPriority(priority) };
 }
