@@ -1,0 +1,5 @@
+import type { Lecture, ReviewCard, ReviewSession, SubjectWeeklyGoal } from "./study-types";
+import { getSubjectWeeklyGoalProgress, getWeekStartIso, getWeeklyGoalPercent } from "./subject-weekly-goals";
+
+export interface ArchivedWeeklyGoal { goal: SubjectWeeklyGoal; reviewedPercent: number; focusPercent: number; }
+export function getArchivedWeeklyGoals(subjectId: string, goals: SubjectWeeklyGoal[], lectures: Lecture[], reviewCards: ReviewCard[], reviewSessions: ReviewSession[], now = new Date()): ArchivedWeeklyGoal[] { const currentWeekStart = getWeekStartIso(now); return goals.filter((goal) => goal.subjectId === subjectId && goal.weekStart < currentWeekStart).sort((a, b) => b.weekStart.localeCompare(a.weekStart)).slice(0, 4).map((goal) => { const end = new Date(goal.weekStart); end.setDate(end.getDate() + 7); const progress = getSubjectWeeklyGoalProgress(subjectId, goal.weekStart, lectures, reviewCards, reviewSessions, end.toISOString()); return { goal, reviewedPercent: getWeeklyGoalPercent(progress.reviewedCardCount, goal.reviewTarget), focusPercent: getWeeklyGoalPercent(progress.focusMinutes, goal.focusMinutesTarget) }; }); }
