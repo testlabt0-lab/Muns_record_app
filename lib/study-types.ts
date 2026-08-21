@@ -189,6 +189,10 @@ export interface SyncSettings {
   storageWarningPercent?: number;
   weeklyDigestEnabled?: boolean;
   weeklyDigestNotificationId?: string;
+  weeklyReflectionReminderEnabled?: boolean;
+  weeklyReflectionReminderNotificationId?: string;
+  weeklyReflectionReminderHour?: number;
+  weeklyReflectionReminderMinute?: number;
   weeklyLectureGoal?: number;
   weeklyReviewGoal?: number;
   weeklyGoalNotificationEnabled?: boolean;

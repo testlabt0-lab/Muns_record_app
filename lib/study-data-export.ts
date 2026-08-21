@@ -5,7 +5,7 @@ import type { StudyStore } from "./study-types";
  * لا تُضمّن الملفات الصوتية أو المرفقات الثنائية؛ بل تحفظ بياناتها الوصفية فقط.
  */
 export function createStudyDataExport(store: StudyStore, exportedAt = new Date().toISOString()) {
-  const { weeklyDigestNotificationId, dailyFocusReminderNotificationId, ...settings } = store.syncSettings;
+  const { weeklyDigestNotificationId, dailyFocusReminderNotificationId, weeklyReflectionReminderNotificationId, ...settings } = store.syncSettings;
   return {
     format: "muhadir-study-data",
     schemaVersion: 1,
@@ -14,7 +14,7 @@ export function createStudyDataExport(store: StudyStore, exportedAt = new Date()
     note: "يحتوي هذا الملف على بيانات الدراسة والنصوص والملخصات والمراجعة، ولا يحتوي ملفات الصوت أو المرفقات نفسها.",
     data: {
       ...store,
-      syncSettings: { ...settings, weeklyDigestEnabled: false, dailyFocusReminderEnabled: false },
+      syncSettings: { ...settings, weeklyDigestEnabled: false, dailyFocusReminderEnabled: false, weeklyReflectionReminderEnabled: false },
       lectures: store.lectures.map(({ audioUri, audioParts, attachments, ...lecture }) => ({
         ...lecture,
         hasLocalMedia: Boolean(audioUri || audioParts?.length || attachments?.length),

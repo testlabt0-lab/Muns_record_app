@@ -110,6 +110,17 @@ export async function cancelWeeklyDigestReminder(notificationId?: string) {
   if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId);
 }
 
+export async function scheduleWeeklyReflectionReminder(hour = 20, minute = 0) {
+  if (Platform.OS === "web") return undefined;
+  if (Platform.OS === "android") await Notifications.setNotificationChannelAsync("study-reflections", { name: "ملاحظات أسبوعية", importance: Notifications.AndroidImportance.DEFAULT });
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return undefined;
+  return Notifications.scheduleNotificationAsync({ content: { title: "اكتب ملاحظتك الختامية", body: "خصّص دقيقة لتوثيق ما نجح معك وما تريد تحسينه هذا الأسبوع.", data: { url: "/weekly-summary" } }, trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: 1, hour, minute, channelId: "study-reflections" } });
+}
+
+export async function cancelWeeklyReflectionReminder(notificationId?: string) { if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId); }
+
 export async function scheduleDailyFocusReminder() {
   if (Platform.OS === "web") return undefined;
   if (Platform.OS === "android") {
