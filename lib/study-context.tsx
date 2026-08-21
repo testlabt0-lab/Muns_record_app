@@ -6,12 +6,13 @@ import { scheduleReview, type ReviewGrade } from "@/lib/review-scheduler";
 import type { AcademicTerm, AcademicYear, BackupActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, ReviewList, ReviewSession, StudyStore, StudyTask, Subject, SubjectSection, TermKind } from "@/lib/study-types";
 import { normalizeSubjectTermGoalTargets } from "@/lib/subject-term-goals";
 import { getWeekStartIso, normalizeWeeklyGoalTargets } from "@/lib/subject-weekly-goals";
+import { normalizeWeeklyReflection } from "@/lib/weekly-reflection";
 import { createReplacementSnapshot, restoreReplacementSnapshot as restoreSnapshot } from "@/lib/replacement-history";
 
 const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
-  years: [], terms: [], subjects: [], subjectGoals: [], weeklySubjectGoals: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [], replacementSnapshots: [],
+  years: [], terms: [], subjects: [], subjectGoals: [], weeklySubjectGoals: [], weeklyReflections: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [], replacementSnapshots: [],
   syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, weeklyReviewReminderHour: 18, weeklyReviewReminderMinute: 0, appearanceMode: "light", lastBackupStatus: "idle" },
 };
 
@@ -43,6 +44,7 @@ type StudyContextValue = StudyStore & {
   setSubjectWeeklyGoal: (subjectId: string, targets: { reviewTarget: number; focusMinutesTarget: number; lateReminderThresholdPercent?: number }) => void;
   markSubjectWeeklyGoalLateReminder: (subjectId: string, weekStart: string) => void;
   replaceSubjectGoalSettings: (subjectGoals: StudyStore["subjectGoals"], weeklySubjectGoals: StudyStore["weeklySubjectGoals"]) => void;
+  saveWeeklyReflection: (weekStart: string, note: string) => void;
   markSubjectGoalNearReminder: (subjectId: string) => void;
   reviewCard: (cardId: string, correct: boolean) => void;
   gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;
@@ -67,7 +69,7 @@ function makeId(prefix: string) { return `${prefix}-${Date.now()}-${Math.random(
 
 function normalizeStore(value: Partial<StudyStore>): StudyStore {
   return {
-    years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [], subjectGoals: value.subjectGoals ?? [], weeklySubjectGoals: value.weeklySubjectGoals ?? [],
+    years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [], subjectGoals: value.subjectGoals ?? [], weeklySubjectGoals: value.weeklySubjectGoals ?? [], weeklyReflections: value.weeklyReflections ?? [],
     lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], tagColors: lecture.tagColors ?? {}, bookmarks: lecture.bookmarks ?? [], attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
     reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], reviewSessions: value.reviewSessions ?? [], reviewChallenges: value.reviewChallenges ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [], replacementSnapshots: value.replacementSnapshots ?? [],
     syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, weeklyReviewReminderHour: 18, weeklyReviewReminderMinute: 0, appearanceMode: "light", lastBackupStatus: "idle", ...value.syncSettings },
@@ -134,6 +136,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       setSubjectWeeklyGoal: (subjectId, targets) => { if (!store.subjects.some((subject) => subject.id === subjectId)) throw new Error("المادة غير موجودة"); const normalized = normalizeWeeklyGoalTargets(targets); const weekStart = getWeekStartIso(); setStore((current) => ({ ...current, weeklySubjectGoals: [{ subjectId, weekStart, ...normalized, updatedAt: new Date().toISOString(), lateReminderNotifiedAt: undefined }, ...(current.weeklySubjectGoals ?? []).filter((goal) => !(goal.subjectId === subjectId && goal.weekStart === weekStart))] })); },
       markSubjectWeeklyGoalLateReminder: (subjectId, weekStart) => setStore((current) => ({ ...current, weeklySubjectGoals: (current.weeklySubjectGoals ?? []).map((goal) => goal.subjectId === subjectId && goal.weekStart === weekStart ? { ...goal, lateReminderNotifiedAt: new Date().toISOString() } : goal) })),
       replaceSubjectGoalSettings: (subjectGoals, weeklySubjectGoals) => setStore((current) => ({ ...current, subjectGoals: subjectGoals ?? [], weeklySubjectGoals: weeklySubjectGoals ?? [] })),
+      saveWeeklyReflection: (weekStart, note) => setStore((current) => ({ ...current, weeklyReflections: [normalizeWeeklyReflection(weekStart, note), ...(current.weeklyReflections ?? []).filter((reflection) => reflection.weekStart !== weekStart)] })),
       markSubjectGoalNearReminder: (subjectId) => setStore((current) => ({ ...current, subjectGoals: (current.subjectGoals ?? []).map((goal) => goal.subjectId === subjectId ? { ...goal, nearGoalReminderNotifiedAt: new Date().toISOString() } : goal) })),
       reviewCard: (cardId, correct) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => {
         if (card.id !== cardId) return card;

@@ -50,6 +50,12 @@ export interface SubjectWeeklyGoal {
   lateReminderThresholdPercent?: number;
 }
 
+export interface WeeklyReflection {
+  weekStart: string;
+  note: string;
+  updatedAt: string;
+}
+
 export interface TranscriptSegment {
   id: string;
   text: string;
@@ -222,6 +228,7 @@ export interface StudyStore {
   subjects: Subject[];
   subjectGoals?: SubjectTermGoal[];
   weeklySubjectGoals?: SubjectWeeklyGoal[];
+  weeklyReflections?: WeeklyReflection[];
   lectures: Lecture[];
   reviewCards: ReviewCard[];
   reviewLists?: ReviewList[];
