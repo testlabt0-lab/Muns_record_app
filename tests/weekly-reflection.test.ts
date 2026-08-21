@@ -16,4 +16,5 @@ describe("الملاحظة الختامية للأسبوع", () => {
     expect(completed.followUpCompleted).toBe(true); expect(completed.followUpCompletedAt).toBe("x"); expect(empty.followUpCompleted).toBe(false);
   });
   it("يحفظ أولوية واستحقاق هدف المتابعة عند وجوده", () => { const value = normalizeWeeklyReflection("2026-01-05", "تقدم", { followUpGoal: "خطوة", followUpPriority: "high", followUpDueAt: "2026-01-09" }, "x"); expect(value.followUpPriority).toBe("high"); expect(value.followUpDueAt).toBe("2026-01-09"); });
+  it("يربط هدف المتابعة بمعرف مادة صالح", () => { const value = normalizeWeeklyReflection("2026-01-05", "تقدم", { followUpGoal: "خطوة", followUpSubjectId: "subject-1" }, "x"); expect(value.followUpSubjectId).toBe("subject-1"); });
 });
