@@ -9,6 +9,7 @@ export function buildLectureSearchText(lecture: Lecture, subject?: Subject) {
     ...(lecture.summary?.terms ?? []),
     ...(lecture.summary?.reviewQuestions ?? []),
     ...(lecture.tags ?? []),
+    ...(lecture.notes ?? []).map((note) => note.text),
     subject?.title,
     subject?.theoryInstructor,
     subject?.practicalInstructor,

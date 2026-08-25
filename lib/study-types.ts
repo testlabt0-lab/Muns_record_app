@@ -116,6 +116,14 @@ export interface LectureBookmark {
   createdAt: string;
 }
 
+export interface LectureNote {
+  id: string;
+  text: string;
+  timestampSeconds?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Lecture {
   id: string;
   subjectId: string;
@@ -126,6 +134,7 @@ export interface Lecture {
   tags?: string[];
   tagColors?: Record<string, string>;
   bookmarks?: LectureBookmark[];
+  notes?: LectureNote[];
   durationSeconds: number;
   audioUri?: string;
   audioSizeBytes?: number;

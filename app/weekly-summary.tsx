@@ -62,7 +62,7 @@ export default function WeeklySummaryScreen() {
   const followUpSubjectComparison = useMemo(() => getFollowUpSubjectComparison(weeklyReflections ?? [], subjects), [subjects, weeklyReflections]);
   const followUpStreakBreakStatus = useMemo(() => getFollowUpStreakBreakStatus(weeklyReflections ?? []), [weeklyReflections]);
   const followUpStreakBreakNeedsReminder = shouldNotifyFollowUpStreakBreak(syncSettings.weeklyReflectionFollowUpStreakReminderEnabled, syncSettings.weeklyReflectionFollowUpStreakReminderNotifiedForWeek, followUpStreakBreakStatus);
-  const followUpDueOptions = useMemo(() => getFollowUpDueOptions(), [reflectionWeekStart]);
+  const followUpDueOptions = useMemo(() => getFollowUpDueOptions(), []);
   const followUpPostponeOptions = useMemo(() => getFollowUpPostponeOptions(followUpDueAt), [followUpDueAt]);
   const reflectionReminderHour = normalizeWeeklyReflectionReminderHour(syncSettings.weeklyReflectionReminderHour);
   const reflectionReminderMinute = normalizeWeeklyReflectionReminderMinute(syncSettings.weeklyReflectionReminderMinute);
