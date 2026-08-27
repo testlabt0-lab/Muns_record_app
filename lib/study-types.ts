@@ -136,6 +136,8 @@ export interface Lecture {
   bookmarks?: LectureBookmark[];
   notes?: LectureNote[];
   durationSeconds: number;
+  lastPlaybackPositionSeconds?: number;
+  lastPlaybackUpdatedAt?: string;
   audioUri?: string;
   audioSizeBytes?: number;
   audioParts?: LectureAudioPart[];
