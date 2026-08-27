@@ -50,6 +50,7 @@ type StudyContextValue = StudyStore & {
   reviewCard: (cardId: string, correct: boolean) => void;
   gradeReviewCard: (cardId: string, grade: ReviewGrade) => void;
   addTask: (task: Omit<StudyTask, "id" | "createdAt" | "completed">) => string;
+  removeTask: (taskId: string) => void;
   updateTask: (taskId: string, changes: Partial<Pick<StudyTask, "title" | "dueAt" | "kind" | "subjectId" | "completed" | "notificationId" | "calendarEventId">>) => void;
   updateSyncSettings: (changes: Partial<StudyStore["syncSettings"]>) => void;
   addBackupActivity: (activity: Omit<BackupActivity, "id" | "createdAt">) => void;
@@ -146,6 +147,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       }) })),
       gradeReviewCard: (cardId, grade) => setStore((current) => ({ ...current, reviewCards: current.reviewCards.map((card) => card.id === cardId ? { ...card, ...scheduleReview(card, grade) } : card) })),
       addTask: (task) => { const id = makeId("task"); setStore((current) => ({ ...current, tasks: [...current.tasks, { ...task, id, completed: false, createdAt: new Date().toISOString() }] })); return id; },
+      removeTask: (taskId) => setStore((current) => ({ ...current, tasks: current.tasks.filter((task) => task.id !== taskId) })),
       updateTask: (taskId, changes) => setStore((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, ...changes } : task) })),
       updateSyncSettings: (changes) => setStore((current) => ({ ...current, syncSettings: { ...current.syncSettings, ...changes } })),
       addBackupActivity: (activity) => setStore((current) => ({ ...current, backupActivities: [{ ...activity, id: makeId("backup-activity"), createdAt: new Date().toISOString() }, ...(current.backupActivities ?? [])].slice(0, 30) })),
