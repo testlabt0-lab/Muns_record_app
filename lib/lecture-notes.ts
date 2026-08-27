@@ -22,3 +22,7 @@ export function createLectureNote(input: { id: string; text: string; timestampSe
     updatedAt: input.now,
   };
 }
+
+export function updateLectureNote(note: LectureNote, text: string, now: string): LectureNote {
+  return { ...note, text: normalizeLectureNoteText(text), updatedAt: now };
+}
