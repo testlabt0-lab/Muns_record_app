@@ -62,11 +62,34 @@ export interface WeeklyReflection {
   followUpDueAt?: string;
   followUpSubjectId?: string;
   followUpRepeatsWeekly?: boolean;
+  followUpCreatedAt?: string;
+  followUpOverdueReminderNotificationId?: string;
+  followUpOverdueReminderScheduleKey?: string;
   updatedAt: string;
 }
 
 export type ReflectionFocusArea = "review" | "organization" | "focus" | "wellbeing";
 export type FollowUpPriority = "high" | "medium" | "low";
+export type FollowUpActivityType = "created" | "completed" | "reopened" | "postponed" | "updated";
+
+export interface FollowUpFilterPreset {
+  id: string;
+  title: string;
+  status: "all" | "open" | "completed";
+  sort: "smart" | "recent" | "priority" | "due";
+  subjectFilter: string;
+  priorityFilter: "all" | FollowUpPriority;
+  dueFilter: "all" | "overdue" | "today" | "week" | "unscheduled";
+  createdAt: string;
+}
+
+export interface FollowUpActivity {
+  id: string;
+  weekStart: string;
+  type: FollowUpActivityType;
+  subjectId?: string;
+  createdAt: string;
+}
 
 export interface TranscriptSegment {
   id: string;
@@ -220,6 +243,8 @@ export interface SyncSettings {
   weeklyReflectionFollowUpReminderNotificationId?: string;
   weeklyReflectionFollowUpDueReminderEnabled?: boolean;
   weeklyReflectionFollowUpDueReminderNotificationId?: string;
+  weeklyReflectionFollowUpOverdueReminderEnabled?: boolean;
+  weeklyReflectionFollowUpOverdueReminderTime?: "morning" | "evening";
   weeklyReflectionFollowUpMonthlyGoal?: number;
   weeklyReflectionFollowUpStreakReminderEnabled?: boolean;
   weeklyReflectionFollowUpStreakReminderNotifiedForWeek?: string;
@@ -263,6 +288,8 @@ export interface StudyStore {
   subjectGoals?: SubjectTermGoal[];
   weeklySubjectGoals?: SubjectWeeklyGoal[];
   weeklyReflections?: WeeklyReflection[];
+  followUpFilterPresets?: FollowUpFilterPreset[];
+  followUpActivities?: FollowUpActivity[];
   lectures: Lecture[];
   reviewCards: ReviewCard[];
   reviewLists?: ReviewList[];

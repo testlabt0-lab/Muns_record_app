@@ -14,7 +14,8 @@ export function createStudyDataExport(store: StudyStore, exportedAt = new Date()
     note: "يحتوي هذا الملف على بيانات الدراسة والنصوص والملخصات والمراجعة، ولا يحتوي ملفات الصوت أو المرفقات نفسها.",
     data: {
       ...store,
-      syncSettings: { ...settings, weeklyDigestEnabled: false, dailyFocusReminderEnabled: false, weeklyReflectionReminderEnabled: false, weeklyReflectionFollowUpReminderEnabled: false, weeklyReflectionFollowUpDueReminderEnabled: false, weeklyReflectionFollowUpStreakReminderEnabled: false },
+      syncSettings: { ...settings, weeklyDigestEnabled: false, dailyFocusReminderEnabled: false, weeklyReflectionReminderEnabled: false, weeklyReflectionFollowUpReminderEnabled: false, weeklyReflectionFollowUpDueReminderEnabled: false, weeklyReflectionFollowUpOverdueReminderEnabled: false, weeklyReflectionFollowUpStreakReminderEnabled: false },
+      weeklyReflections: (store.weeklyReflections ?? []).map(({ followUpOverdueReminderNotificationId, followUpOverdueReminderScheduleKey, ...reflection }) => reflection),
       lectures: store.lectures.map(({ audioUri, audioParts, attachments, ...lecture }) => ({
         ...lecture,
         hasLocalMedia: Boolean(audioUri || audioParts?.length || attachments?.length),
