@@ -12,6 +12,14 @@ export async function persistAttachment(uri: string, originalName: string) {
   return destination.uri;
 }
 
+export function removePersistedAttachment(uri: string) {
+  if (Platform.OS === "web") return false;
+  const file = new File(uri);
+  if (!file.exists) return false;
+  file.delete();
+  return true;
+}
+
 export async function persistBase64Attachment(dataBase64: string, originalName: string) {
   if (Platform.OS === "web") throw new Error("تتطلب استعادة الملفات تطبيق الهاتف.");
   const attachmentsDir = new Directory(Paths.document, "restored-backups");

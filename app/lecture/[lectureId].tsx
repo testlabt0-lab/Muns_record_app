@@ -14,7 +14,7 @@ import { applyDetectedDuration } from "@/lib/audio-duration";
 import { exportLecturePdf } from "@/lib/lecture-export";
 import { normalizeBookmark } from "@/lib/lecture-bookmarks";
 import { createLectureNote, updateLectureNote } from "@/lib/lecture-notes";
-import { attachmentKindFromMime, persistAttachment } from "@/lib/local-attachments";
+import { attachmentKindFromMime, persistAttachment, removePersistedAttachment } from "@/lib/local-attachments";
 import { getAttachmentExtractionError, isImageExtractionSupported } from "@/lib/attachment-extraction";
 import type { LectureAttachment } from "@/lib/study-types";
 import { useStudy } from "@/lib/study-context";
@@ -271,7 +271,13 @@ export default function LectureDetailScreen() {
     } catch { Alert.alert("تعذر إرفاق الملف", "حاول اختيار ملف PDF أو Word مرة أخرى."); }
   };
 
-  const deleteAttachment = (attachmentId: string, title: string) => Alert.alert("إزالة المرفق", `هل تريد إزالة «${title}» من هذه المحاضرة؟`, [{ text: "إلغاء", style: "cancel" }, { text: "إزالة", style: "destructive", onPress: () => removeAttachment(lecture.id, attachmentId) }]);
+  const removeAttachmentWithFile = (attachmentId: string) => {
+    const attachment = (lecture.attachments ?? []).find((item) => item.id === attachmentId);
+    try { if (attachment) removePersistedAttachment(attachment.uri); } catch { /* لا يمنع ملف حُذف أو لا يمكن الوصول إليه تنظيف السجل المحلي. */ }
+    removeAttachment(lecture.id, attachmentId);
+  };
+
+  const deleteAttachment = (attachmentId: string, title: string) => Alert.alert("إزالة المرفق", `هل تريد إزالة «${title}» من هذه المحاضرة وحذف نسخته المحلية؟`, [{ text: "إلغاء", style: "cancel" }, { text: "إزالة", style: "destructive", onPress: () => removeAttachmentWithFile(attachmentId) }]);
 
   const extractAttachmentText = async (attachment: LectureAttachment) => {
     const validationError = getAttachmentExtractionError(attachment.mimeType, attachment.sizeBytes);
