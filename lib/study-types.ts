@@ -50,6 +50,16 @@ export interface SubjectWeeklyGoal {
   lateReminderThresholdPercent?: number;
 }
 
+export interface SubjectSmartReminder {
+  subjectId: string;
+  weekStart: string;
+  enabled: boolean;
+  weekday: 5 | 6 | 7;
+  hour: number;
+  minute: 0 | 30;
+  notificationId?: string;
+}
+
 export interface WeeklyReflection {
   weekStart: string;
   note: string;
@@ -287,6 +297,7 @@ export interface StudyStore {
   subjects: Subject[];
   subjectGoals?: SubjectTermGoal[];
   weeklySubjectGoals?: SubjectWeeklyGoal[];
+  subjectSmartReminders?: SubjectSmartReminder[];
   weeklyReflections?: WeeklyReflection[];
   followUpFilterPresets?: FollowUpFilterPreset[];
   followUpActivities?: FollowUpActivity[];

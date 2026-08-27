@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { createActiveAcademicYear, deactivateAcademicYears, findOrCreateTerm, normalizeRequiredTitle } from "@/lib/study-domain";
 import { scheduleReview, type ReviewGrade } from "@/lib/review-scheduler";
-import type { AcademicTerm, AcademicYear, BackupActivity, FollowUpActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, ReviewList, ReviewSession, StudyStore, StudyTask, Subject, SubjectSection, TermKind, WeeklyReflection } from "@/lib/study-types";
+import type { AcademicTerm, AcademicYear, BackupActivity, FollowUpActivity, Lecture, LectureAttachment, LectureSummary, ReviewCard, ReviewList, ReviewSession, StudyStore, StudyTask, Subject, SubjectSection, SubjectSmartReminder, TermKind, WeeklyReflection } from "@/lib/study-types";
 import { normalizeSubjectTermGoalTargets } from "@/lib/subject-term-goals";
 import { getWeekStartIso, normalizeWeeklyGoalTargets } from "@/lib/subject-weekly-goals";
 import { createNextWeeklyFollowUpRepeat, normalizeWeeklyReflection } from "@/lib/weekly-reflection";
@@ -14,7 +14,7 @@ import { createFollowUpFilterPreset, type FollowUpFilterPresetInput } from "@/li
 const STORE_KEY = "muhadir.study-store.v1";
 
 const emptyStore: StudyStore = {
-  years: [], terms: [], subjects: [], subjectGoals: [], weeklySubjectGoals: [], weeklyReflections: [], followUpFilterPresets: [], followUpActivities: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [], replacementSnapshots: [],
+  years: [], terms: [], subjects: [], subjectGoals: [], weeklySubjectGoals: [], subjectSmartReminders: [], weeklyReflections: [], followUpFilterPresets: [], followUpActivities: [], lectures: [], reviewCards: [], reviewLists: [], reviewSessions: [], reviewChallenges: [], tasks: [], backupActivities: [], replacementSnapshots: [],
   syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyReflectionReminderEnabled: false, weeklyReflectionReminderHour: 20, weeklyReflectionReminderMinute: 0, weeklyReflectionFollowUpReminderEnabled: false, weeklyReflectionFollowUpDueReminderEnabled: false, weeklyReflectionFollowUpOverdueReminderEnabled: false, weeklyReflectionFollowUpOverdueReminderTime: "morning", weeklyReflectionFollowUpMonthlyGoal: 4, weeklyReflectionFollowUpStreakReminderEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, weeklyReviewReminderHour: 18, weeklyReviewReminderMinute: 0, appearanceMode: "light", lastBackupStatus: "idle" },
 };
 
@@ -44,6 +44,7 @@ type StudyContextValue = StudyStore & {
   deleteReviewChallenge: (challengeId: string) => void;
   setSubjectTermGoal: (subjectId: string, targets: { lectureTarget: number; reviewTarget: number; focusMinutesTarget: number }) => void;
   setSubjectWeeklyGoal: (subjectId: string, targets: { reviewTarget: number; focusMinutesTarget: number; lateReminderThresholdPercent?: number }) => void;
+  setSubjectSmartReminder: (subjectId: string, reminder: Omit<SubjectSmartReminder, "subjectId">) => void;
   markSubjectWeeklyGoalLateReminder: (subjectId: string, weekStart: string) => void;
   replaceSubjectGoalSettings: (subjectGoals: StudyStore["subjectGoals"], weeklySubjectGoals: StudyStore["weeklySubjectGoals"]) => void;
   replaceWeeklyReflections: (reflections: WeeklyReflection[]) => void;
@@ -76,7 +77,7 @@ function makeId(prefix: string) { return `${prefix}-${Date.now()}-${Math.random(
 
 function normalizeStore(value: Partial<StudyStore>): StudyStore {
   return {
-    years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [], subjectGoals: value.subjectGoals ?? [], weeklySubjectGoals: value.weeklySubjectGoals ?? [], weeklyReflections: value.weeklyReflections ?? [], followUpFilterPresets: value.followUpFilterPresets ?? [], followUpActivities: value.followUpActivities ?? [],
+    years: value.years ?? [], terms: value.terms ?? [], subjects: value.subjects ?? [], subjectGoals: value.subjectGoals ?? [], weeklySubjectGoals: value.weeklySubjectGoals ?? [], subjectSmartReminders: value.subjectSmartReminders ?? [], weeklyReflections: value.weeklyReflections ?? [], followUpFilterPresets: value.followUpFilterPresets ?? [], followUpActivities: value.followUpActivities ?? [],
     lectures: value.lectures?.map((lecture) => ({ ...lecture, tags: lecture.tags ?? [], tagColors: lecture.tagColors ?? {}, bookmarks: lecture.bookmarks ?? [], notes: lecture.notes ?? [], attachments: lecture.attachments ?? [], transcriptSegments: lecture.transcriptSegments ?? [], audioParts: lecture.audioParts ?? (lecture.audioUri ? [{ id: `${lecture.id}-legacy`, index: 1, uri: lecture.audioUri, durationSeconds: lecture.durationSeconds, sizeBytes: lecture.audioSizeBytes, createdAt: lecture.recordedAt }] : []) })) ?? [],
     reviewCards: value.reviewCards ?? [], reviewLists: value.reviewLists ?? [], reviewSessions: value.reviewSessions ?? [], reviewChallenges: value.reviewChallenges ?? [], tasks: value.tasks ?? [], backupActivities: value.backupActivities ?? [], replacementSnapshots: value.replacementSnapshots ?? [],
     syncSettings: { cloudBackupEnabled: false, recordingPartMinutes: 20, preferredPlaybackRate: 1, storageWarningPercent: 80, weeklyDigestEnabled: false, weeklyReflectionFollowUpOverdueReminderEnabled: false, weeklyReflectionFollowUpOverdueReminderTime: "morning", weeklyReflectionFollowUpMonthlyGoal: 4, weeklyReflectionFollowUpStreakReminderEnabled: false, weeklyLectureGoal: 3, weeklyReviewGoal: 10, weeklyGoalNotificationEnabled: false, dailyFocusGoalMinutes: 30, dailyFocusReminderEnabled: false, weeklyReviewDays: [0, 2, 4], weeklyReviewReminderEnabled: false, weeklyReviewReminderHour: 18, weeklyReviewReminderMinute: 0, appearanceMode: "light", lastBackupStatus: "idle", ...value.syncSettings },
@@ -141,6 +142,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       deleteReviewChallenge: (challengeId) => setStore((current) => ({ ...current, reviewChallenges: (current.reviewChallenges ?? []).filter((challenge) => challenge.id !== challengeId) })),
       setSubjectTermGoal: (subjectId, targets) => { if (!store.subjects.some((subject) => subject.id === subjectId)) throw new Error("المادة غير موجودة"); const normalized = normalizeSubjectTermGoalTargets(targets); setStore((current) => ({ ...current, subjectGoals: [{ subjectId, ...normalized, updatedAt: new Date().toISOString(), nearGoalReminderNotifiedAt: undefined }, ...(current.subjectGoals ?? []).filter((goal) => goal.subjectId !== subjectId)] })); },
       setSubjectWeeklyGoal: (subjectId, targets) => { if (!store.subjects.some((subject) => subject.id === subjectId)) throw new Error("المادة غير موجودة"); const normalized = normalizeWeeklyGoalTargets(targets); const weekStart = getWeekStartIso(); setStore((current) => ({ ...current, weeklySubjectGoals: [{ subjectId, weekStart, ...normalized, updatedAt: new Date().toISOString(), lateReminderNotifiedAt: undefined }, ...(current.weeklySubjectGoals ?? []).filter((goal) => !(goal.subjectId === subjectId && goal.weekStart === weekStart))] })); },
+      setSubjectSmartReminder: (subjectId, reminder) => { if (!store.subjects.some((subject) => subject.id === subjectId)) throw new Error("المادة غير موجودة"); setStore((current) => ({ ...current, subjectSmartReminders: [{ subjectId, ...reminder }, ...(current.subjectSmartReminders ?? []).filter((item) => item.subjectId !== subjectId)] })); },
       markSubjectWeeklyGoalLateReminder: (subjectId, weekStart) => setStore((current) => ({ ...current, weeklySubjectGoals: (current.weeklySubjectGoals ?? []).map((goal) => goal.subjectId === subjectId && goal.weekStart === weekStart ? { ...goal, lateReminderNotifiedAt: new Date().toISOString() } : goal) })),
       replaceSubjectGoalSettings: (subjectGoals, weeklySubjectGoals) => setStore((current) => ({ ...current, subjectGoals: subjectGoals ?? [], weeklySubjectGoals: weeklySubjectGoals ?? [] })),
       replaceWeeklyReflections: (reflections) => setStore((current) => ({ ...current, weeklyReflections: reflections ?? [] })),

@@ -4,6 +4,8 @@ import { getUpcomingFollowUpReminderDate } from "./weekly-reflection-follow-up-r
 import { canScheduleFollowUpDueReminder, getFollowUpDueReminderDate } from "./weekly-reflection-follow-up-due-reminder";
 import { getFollowUpOverdueReminderSchedule, type FollowUpOverdueReminderTime } from "./weekly-reflection-follow-up-overdue-reminder";
 import { normalizeWeeklyReviewDays } from "./review-plan-reminders";
+import type { SubjectSmartReminder } from "./study-types";
+import { getSubjectSmartReminderDate } from "./subject-smart-reminder";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }),
@@ -169,3 +171,15 @@ export async function cancelWeeklyReviewPlanReminders(notificationIds?: string[]
   if (Platform.OS === "web") return;
   await Promise.all((notificationIds ?? []).map((notificationId) => Notifications.cancelScheduledNotificationAsync(notificationId)));
 }
+
+export async function scheduleSubjectSmartReminder(subjectTitle: string, subjectId: string, reminder: Pick<SubjectSmartReminder, "weekday" | "hour" | "minute">) {
+  const date = getSubjectSmartReminderDate(reminder);
+  if (!date || Platform.OS === "web") return undefined;
+  if (Platform.OS === "android") await Notifications.setNotificationChannelAsync("study-subject-progress", { name: "تقدم المواد", importance: Notifications.AndroidImportance.DEFAULT });
+  const current = await Notifications.getPermissionsAsync();
+  const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+  if (permission.status !== "granted") return undefined;
+  return Notifications.scheduleNotificationAsync({ content: { title: `مراجعة هدف ${subjectTitle}`, body: "تحقق من تقدمك الأسبوعي وابدأ جلسة قصيرة إن احتجت دفعة.", data: { url: `/subject/${subjectId}` } }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date, channelId: "study-subject-progress" } });
+}
+
+export async function cancelSubjectSmartReminder(notificationId?: string) { if (notificationId && Platform.OS !== "web") await Notifications.cancelScheduledNotificationAsync(notificationId); }
