@@ -1,4 +1,4 @@
-import type { SubjectSmartReminder } from "./study-types";
+import type { SubjectSmartReminder, SubjectWeeklyGoal } from "./study-types";
 
 export const SUBJECT_SMART_REMINDER_DAYS = [{ weekday: 5 as const, label: "الخميس" }, { weekday: 6 as const, label: "الجمعة" }, { weekday: 7 as const, label: "السبت" }];
 export const SUBJECT_SMART_REMINDER_HOURS = [17, 19, 21] as const;
@@ -23,4 +23,10 @@ export function getSubjectSmartReminderDate(reminder: Pick<SubjectSmartReminder,
   date.setDate(date.getDate() + mondayOffset + reminder.weekday - 2);
   date.setHours(reminder.hour, reminder.minute, 0, 0);
   return date.getTime() > now.getTime() ? date : undefined;
+}
+
+/** يعد الهدف مكتملاً حين تتحقق جميع المقاييس ذات الهدف الموجب؛ القيم الصفرية لا تمنع الإتمام. */
+export function isSubjectWeeklyGoalComplete(progress: { reviewedCardCount: number; focusMinutes: number }, goal: Pick<SubjectWeeklyGoal, "reviewTarget" | "focusMinutesTarget">) {
+  const metrics = [{ current: progress.reviewedCardCount, target: goal.reviewTarget }, { current: progress.focusMinutes, target: goal.focusMinutesTarget }].filter((metric) => metric.target > 0);
+  return metrics.length > 0 && metrics.every((metric) => metric.current >= metric.target);
 }

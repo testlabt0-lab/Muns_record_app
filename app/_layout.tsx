@@ -12,8 +12,10 @@ import { AppLockGate } from "@/components/app-lock-gate";
 import { createTRPCClient, trpc } from "@/lib/trpc";
 import { normalizeAppearanceMode } from "@/lib/appearance-preference";
 import { ThemeProvider, useThemeContext } from "@/lib/theme-provider";
-import { cancelWeeklyReflectionFollowUpOverdueReminder, scheduleWeeklyReflectionFollowUpOverdueReminder } from "@/lib/study-reminders";
+import { cancelSubjectSmartReminder, cancelWeeklyReflectionFollowUpOverdueReminder, scheduleWeeklyReflectionFollowUpOverdueReminder } from "@/lib/study-reminders";
 import { getFollowUpOverdueReminderScheduleKey, normalizeFollowUpOverdueReminderTime } from "@/lib/weekly-reflection-follow-up-overdue-reminder";
+import { isSubjectWeeklyGoalComplete } from "@/lib/subject-smart-reminder";
+import { getSubjectWeeklyGoalProgress, getWeekStartIso } from "@/lib/subject-weekly-goals";
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
@@ -32,7 +34,7 @@ export default function RootLayout() {
 }
 
 function ThemedNavigator() {
-  const { hydrated, replaceWeeklyReflections, syncSettings, weeklyReflections } = useStudy();
+  const { hydrated, lectures, replaceWeeklyReflections, reviewCards, reviewSessions, setSubjectSmartReminder, subjectSmartReminders, syncSettings, weeklyReflections, weeklySubjectGoals } = useStudy();
   const { colorScheme, setColorScheme } = useThemeContext();
   const router = useRouter();
   useEffect(() => {
@@ -67,5 +69,18 @@ function ThemedNavigator() {
       if (changed) replaceWeeklyReflections(next);
     })();
   }, [hydrated, replaceWeeklyReflections, syncSettings.weeklyReflectionFollowUpOverdueReminderEnabled, syncSettings.weeklyReflectionFollowUpOverdueReminderTime, weeklyReflections]);
+  useEffect(() => {
+    if (!hydrated) return;
+    const weekStart = getWeekStartIso();
+    const currentGoals = weeklySubjectGoals ?? [];
+    void Promise.all((subjectSmartReminders ?? []).filter((reminder) => reminder.enabled && reminder.notificationId && reminder.weekStart === weekStart).map(async (reminder) => {
+      const goal = currentGoals.find((item) => item.subjectId === reminder.subjectId && item.weekStart === weekStart);
+      if (!goal) return;
+      const progress = getSubjectWeeklyGoalProgress(reminder.subjectId, weekStart, lectures, reviewCards, reviewSessions ?? []);
+      if (!isSubjectWeeklyGoalComplete(progress, goal)) return;
+      await cancelSubjectSmartReminder(reminder.notificationId);
+      setSubjectSmartReminder(reminder.subjectId, { ...reminder, enabled: false, notificationId: undefined });
+    }));
+  }, [hydrated, lectures, reviewCards, reviewSessions, setSubjectSmartReminder, subjectSmartReminders, weeklySubjectGoals]);
   return <><StatusBar style={colorScheme === "dark" ? "light" : "dark"} /><AppLockGate><Stack screenOptions={{ headerShown: false, animation: "slide_from_left" }}><Stack.Screen name="(tabs)" /><Stack.Screen name="year/[yearId]" /><Stack.Screen name="term/[termId]" /><Stack.Screen name="subject/[subjectId]" /><Stack.Screen name="record" options={{ presentation: "modal", animation: "slide_from_bottom" }} /><Stack.Screen name="lecture/[lectureId]" /><Stack.Screen name="storage" /><Stack.Screen name="follow-up-steps" /></Stack></AppLockGate></>;
 }

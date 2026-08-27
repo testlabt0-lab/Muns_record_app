@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getSubjectSmartReminderDate, getSubjectSmartReminderTimeLabel, normalizeSubjectSmartReminder } from "../lib/subject-smart-reminder";
+import { getSubjectSmartReminderDate, getSubjectSmartReminderTimeLabel, isSubjectWeeklyGoalComplete, normalizeSubjectSmartReminder } from "../lib/subject-smart-reminder";
 
 describe("تذكير تقدم المادة الذكي", () => {
   it("يقبل خيارات الموعد المعتمدة ويحفظها بصيغة قابلة للعرض", () => {
@@ -17,5 +17,12 @@ describe("تذكير تقدم المادة الذكي", () => {
     const reminder = { weekday: 6 as const, hour: 19, minute: 0 as const };
     expect(getSubjectSmartReminderDate(reminder, new Date("2026-08-27T12:00:00"))?.toISOString()).toContain("2026-08-28T19:00:00");
     expect(getSubjectSmartReminderDate(reminder, new Date("2026-08-29T12:00:00"))).toBeUndefined();
+  });
+
+  it("يلغي التذكير فقط عندما تتحقق كل مقاييس الهدف ذات القيمة الموجبة", () => {
+    const goal = { reviewTarget: 10, focusMinutesTarget: 60 };
+    expect(isSubjectWeeklyGoalComplete({ reviewedCardCount: 10, focusMinutes: 59 }, goal)).toBe(false);
+    expect(isSubjectWeeklyGoalComplete({ reviewedCardCount: 10, focusMinutes: 60 }, goal)).toBe(true);
+    expect(isSubjectWeeklyGoalComplete({ reviewedCardCount: 0, focusMinutes: 0 }, { reviewTarget: 0, focusMinutesTarget: 0 })).toBe(false);
   });
 });

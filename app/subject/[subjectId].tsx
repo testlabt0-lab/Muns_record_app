@@ -66,7 +66,7 @@ function SubjectWeeklyGoalCard({ goal, progress, onSave }: { goal?: SubjectWeekl
   const [focusTarget, setFocusTarget] = useState(String(goal?.focusMinutesTarget ?? 60));
   const [lateThreshold, setLateThreshold] = useState(goal?.lateReminderThresholdPercent ?? 50);
   const [busy, setBusy] = useState(false);
-  const reminder = (subjectSmartReminders ?? []).find((item) => item.subjectId === goal?.subjectId && item.weekStart === goal?.weekStart);
+  const reminder = (subjectSmartReminders ?? []).find((item) => item.subjectId === goal?.subjectId);
   const settings = normalizeSubjectSmartReminder(reminder ?? {});
   const subject = goal ? getSubject(goal.subjectId) : undefined;
   const metrics = [{ label: "بطاقات", current: progress.reviewedCardCount, target: goal?.reviewTarget ?? 0 }, { label: "تركيز", current: progress.focusMinutes, target: goal?.focusMinutesTarget ?? 0 }];
