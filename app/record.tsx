@@ -11,6 +11,7 @@ import { appTheme } from "@/lib/app-theme";
 import { isSupportedAudioFile, titleFromImportedAudioFile } from "@/lib/import-recording";
 import { useStudy } from "@/lib/study-context";
 import type { LectureAudioPart, SubjectSection } from "@/lib/study-types";
+import { getRecordingExitIntent, getRecordingPartHint } from "@/lib/recording-stability";
 import { ScreenContainer } from "@/components/screen-container";
 
 export default function RecordScreen() {
@@ -25,6 +26,7 @@ export default function RecordScreen() {
   const [totalElapsedSeconds, setTotalElapsedSeconds] = useState(0);
   const [audioParts, setAudioParts] = useState<LectureAudioPart[]>([]);
   const [finalized, setFinalized] = useState(false);
+  const [partTransitioning, setPartTransitioning] = useState(false);
   const [title, setTitle] = useState("");
   const startedAt = useRef<number | null>(null);
   const isSwitchingPart = useRef(false);
@@ -80,6 +82,7 @@ export default function RecordScreen() {
   }, [audioParts.length, recorder]);
 
   const stopRecording = async () => {
+    if (partTransitioning) return;
     const part = await finishCurrentPart();
     if (!part) return;
     setFinalized(true);
@@ -87,19 +90,22 @@ export default function RecordScreen() {
   };
 
   const nextPart = useCallback(async () => {
-    const part = await finishCurrentPart();
-    if (!part) return;
+    if (isSwitchingPart.current) return;
+    isSwitchingPart.current = true;
+    setPartTransitioning(true);
     try {
+      const part = await finishCurrentPart();
+      if (!part) return;
       await recorder.prepareToRecordAsync();
       recorder.record();
       startedAt.current = Date.now();
     } catch { Alert.alert("حُفظ الجزء", "تعذر بدء الجزء التالي. يمكنك إنهاء المحاضرة وحفظ الأجزاء المسجلة."); setFinalized(true); }
+    finally { isSwitchingPart.current = false; setPartTransitioning(false); }
   }, [finishCurrentPart, recorder]);
 
   useEffect(() => {
     if (!recorderState.isRecording || elapsedSeconds < autoPartDurationSeconds || isSwitchingPart.current) return;
-    isSwitchingPart.current = true;
-    void nextPart().finally(() => { isSwitchingPart.current = false; });
+    void nextPart();
   }, [autoPartDurationSeconds, elapsedSeconds, nextPart, recorderState.isRecording]);
 
   const importRecording = async () => {
@@ -131,9 +137,16 @@ export default function RecordScreen() {
     router.replace({ pathname: "/lecture/[lectureId]", params: { lectureId } });
   };
 
+  const requestClose = () => {
+    const intent = getRecordingExitIntent({ isRecording: recorderState.isRecording, isTransitioningPart: partTransitioning, finalized, partCount: audioParts.length });
+    if (intent === "finish-recording") { Alert.alert("التسجيل قيد الحفظ", "أنه المحاضرة أولاً حتى نضمن حفظ الجزء الصوتي الحالي، ثم اختر حفظ المحاضرة أو المتابعة في العنوان.", [{ text: "متابعة التسجيل", style: "cancel" }, { text: "إنهاء التسجيل", onPress: () => void stopRecording() }]); return; }
+    if (intent === "save-recording") { Alert.alert("احفظ المحاضرة أولاً", "لديك أجزاء صوتية جاهزة. احفظ المحاضرة قبل الخروج حتى تظهر في مكتبتك.", [{ text: "متابعة التحرير", style: "cancel" }, { text: "حفظ المحاضرة", onPress: saveRecording }]); return; }
+    router.back();
+  };
+
   return (
     <ScreenContainer className="px-5" edges={["top", "bottom", "left", "right"]}>
-      <AppHeader eyebrow="محاضرة جديدة" title="تسجيل صوتي" action={<IconButton icon="close" label="إغلاق" onPress={() => router.back()} tone="neutral" />} />
+      <AppHeader eyebrow="محاضرة جديدة" title="تسجيل صوتي" action={<IconButton icon="close" label="إغلاق" onPress={requestClose} tone="neutral" />} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Pressable onPress={() => !recorderState.isRecording && setSelectingDestination(true)} style={({ pressed }) => [styles.destination, pressed && !recorderState.isRecording && styles.pressed]}>
           <View style={styles.destinationIcon}><MaterialIcons name="folder-open" size={22} color={appTheme.primary} /></View>
@@ -145,9 +158,9 @@ export default function RecordScreen() {
           <View style={[styles.recordOrb, recorderState.isRecording && styles.recordOrbLive]}><MaterialIcons name={recorderState.isRecording ? "stop" : finalized ? "check" : "mic"} size={38} color="#FFFFFF" /></View>
           <Text style={styles.timer}>{formatDuration(totalElapsedSeconds + elapsedSeconds)}</Text>
           <View style={styles.recordStatus}>{recorderState.isRecording ? <><View style={styles.liveDot} /><Text style={styles.liveText}>الجزء {audioParts.length + 1} قيد التسجيل</Text></> : finalized ? <StatusPill label={`${audioParts.length} أجزاء جاهزة للحفظ`} tone="success" /> : <Text style={styles.readyText}>اختر الوجهة ثم ابدأ التسجيل</Text>}</View>
-          {!finalized ? <><PrimaryButton label={recorderState.isRecording ? "إنهاء المحاضرة" : "بدء التسجيل"} icon={recorderState.isRecording ? "stop" : "mic"} onPress={recorderState.isRecording ? stopRecording : startRecording} />{recorderState.isRecording ? <Pressable onPress={() => void nextPart()} style={styles.segmentButton}><MaterialIcons name="call-split" size={18} color={appTheme.primary} /><Text style={styles.segmentButtonText}>إنهاء الجزء وبدء جزء جديد</Text></Pressable> : <Pressable onPress={() => void importRecording()} style={styles.importButton}><MaterialIcons name="file-upload" size={18} color={appTheme.primary} /><Text style={styles.importButtonText}>استيراد تسجيل سابق</Text></Pressable>}</> : null}
+          {!finalized ? <><PrimaryButton label={recorderState.isRecording ? "إنهاء المحاضرة" : "بدء التسجيل"} icon={recorderState.isRecording ? "stop" : "mic"} disabled={partTransitioning} onPress={recorderState.isRecording ? stopRecording : startRecording} />{recorderState.isRecording ? <Pressable disabled={partTransitioning} onPress={() => void nextPart()} style={[styles.segmentButton, partTransitioning && styles.disabled]}><MaterialIcons name="call-split" size={18} color={appTheme.primary} /><Text style={styles.segmentButtonText}>{partTransitioning ? "يجري حفظ الجزء" : "إنهاء الجزء وبدء جزء جديد"}</Text></Pressable> : <Pressable onPress={() => void importRecording()} style={styles.importButton}><MaterialIcons name="file-upload" size={18} color={appTheme.primary} /><Text style={styles.importButtonText}>استيراد تسجيل سابق</Text></Pressable>}</> : null}
         </View>
-        {finalized ? <View style={styles.savePanel}><Text style={styles.saveLabel}>عنوان المحاضرة</Text><TextInput value={title} onChangeText={setTitle} style={styles.titleInput} textAlign="right" placeholder="مثال: المحاضرة الثالثة" placeholderTextColor="#94A3B8" returnKeyType="done" /><Text style={styles.partHint}>يفصل التطبيق التسجيل تلقائياً كل 20 دقيقة، ويحوّل كل جزء ثم يدمج النص والملخص.</Text><PrimaryButton label="حفظ المحاضرة" icon="save" onPress={saveRecording} /></View> : null}
+        {finalized ? <View style={styles.savePanel}><Text style={styles.saveLabel}>عنوان المحاضرة</Text><TextInput value={title} onChangeText={setTitle} style={styles.titleInput} textAlign="right" placeholder="مثال: المحاضرة الثالثة" placeholderTextColor="#94A3B8" returnKeyType="done" /><Text style={styles.partHint}>{getRecordingPartHint(syncSettings.recordingPartMinutes ?? 20)}</Text><PrimaryButton label="حفظ المحاضرة" icon="save" onPress={saveRecording} /></View> : null}
         <View style={styles.privacy}><MaterialIcons name="verified-user" size={18} color={appTheme.success} /><Text style={styles.privacyText}>يبقى التسجيل على جهازك. لن يُرسل للمعالجة الذكية إلا عندما تختار التحويل إلى نص.</Text></View>
       </ScrollView>
       <DestinationPicker visible={selectingDestination} subjects={subjects} terms={terms} years={years} selectedSubjectId={selectedSubjectId} section={selectedSection} onClose={() => setSelectingDestination(false)} onPick={(subjectId, section) => { setSelectedSubjectId(subjectId); setSelectedSection(section); setSelectingDestination(false); }} onOpenStudy={() => { setSelectingDestination(false); router.replace("/study"); }} />
@@ -177,7 +190,7 @@ function formatDuration(seconds: number) { const minutes = Math.floor(seconds / 
 const styles = StyleSheet.create({
   content: { gap: 16, paddingBottom: 24 }, destination: { alignItems: "center", backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 18, borderWidth: 1, flexDirection: "row-reverse", gap: 12, padding: 14 }, destinationIcon: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderRadius: 13, height: 43, justifyContent: "center", width: 43 }, destinationText: { flex: 1 }, destinationLabel: { color: appTheme.muted, fontSize: 12, fontWeight: "700", textAlign: "right" }, destinationValue: { color: appTheme.ink, fontSize: 14, fontWeight: "800", lineHeight: 20, marginTop: 3, textAlign: "right" },
   sectionRow: { backgroundColor: "#E2E8F0", borderRadius: 14, flexDirection: "row-reverse", gap: 4, padding: 4 }, sectionButton: { alignItems: "center", borderRadius: 10, flex: 1, minHeight: 38, justifyContent: "center" }, sectionButtonActive: { backgroundColor: appTheme.surface }, sectionButtonText: { color: appTheme.muted, fontSize: 14, fontWeight: "800" }, sectionButtonTextActive: { color: appTheme.primary }, sectionDisabled: { opacity: 0.55 },
-  recorderCard: { alignItems: "center", backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 28, borderWidth: 1, padding: 28 }, recorderCardActive: { borderColor: "#FDA4AF", backgroundColor: "#FFF9FA" }, recordOrb: { alignItems: "center", backgroundColor: appTheme.primary, borderRadius: 50, height: 100, justifyContent: "center", width: 100 }, recordOrbLive: { backgroundColor: appTheme.danger }, timer: { color: appTheme.ink, fontSize: 42, fontVariant: ["tabular-nums"], fontWeight: "300", letterSpacing: 1, marginTop: 20 }, recordStatus: { alignItems: "center", flexDirection: "row-reverse", gap: 7, height: 36, justifyContent: "center", marginVertical: 10 }, liveDot: { backgroundColor: appTheme.danger, borderRadius: 5, height: 9, width: 9 }, liveText: { color: appTheme.danger, fontSize: 13, fontWeight: "800" }, readyText: { color: appTheme.muted, fontSize: 13 },
+  recorderCard: { alignItems: "center", backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 28, borderWidth: 1, padding: 28 }, recorderCardActive: { borderColor: "#FDA4AF", backgroundColor: "#FFF9FA" }, recordOrb: { alignItems: "center", backgroundColor: appTheme.primary, borderRadius: 50, height: 100, justifyContent: "center", width: 100 }, recordOrbLive: { backgroundColor: appTheme.danger }, timer: { color: appTheme.ink, fontSize: 42, fontVariant: ["tabular-nums"], fontWeight: "300", letterSpacing: 1, marginTop: 20 }, recordStatus: { alignItems: "center", flexDirection: "row-reverse", gap: 7, height: 36, justifyContent: "center", marginVertical: 10 }, liveDot: { backgroundColor: appTheme.danger, borderRadius: 5, height: 9, width: 9 }, liveText: { color: appTheme.danger, fontSize: 13, fontWeight: "800" }, readyText: { color: appTheme.muted, fontSize: 13 }, disabled: { opacity: 0.45 },
   savePanel: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 20, borderWidth: 1, gap: 10, padding: 16 }, saveLabel: { color: appTheme.ink, fontSize: 14, fontWeight: "800", textAlign: "right" }, titleInput: { backgroundColor: "#F8FAFC", borderColor: appTheme.border, borderRadius: 13, borderWidth: 1, color: appTheme.ink, fontSize: 15, minHeight: 50, paddingHorizontal: 13 }, partHint: { color: appTheme.muted, fontSize: 12, lineHeight: 18, textAlign: "right" }, importButton: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderColor: "#C7D2FE", borderRadius: 13, borderWidth: 1, flexDirection: "row-reverse", gap: 7, justifyContent: "center", marginTop: 9, minHeight: 44, paddingHorizontal: 12 }, importButtonText: { color: appTheme.primary, fontSize: 13, fontWeight: "800" }, segmentButton: { alignItems: "center", backgroundColor: appTheme.primarySoft, borderRadius: 13, flexDirection: "row-reverse", gap: 7, justifyContent: "center", marginTop: 9, minHeight: 44, paddingHorizontal: 12 }, segmentButtonText: { color: appTheme.primary, fontSize: 13, fontWeight: "800" }, privacy: { alignItems: "flex-start", backgroundColor: appTheme.successSoft, borderRadius: 16, flexDirection: "row-reverse", gap: 8, padding: 13 }, privacyText: { color: appTheme.success, flex: 1, fontSize: 12, lineHeight: 18, textAlign: "right" },
   sheet: { backgroundColor: appTheme.background, flex: 1 }, sheetHeader: { alignItems: "center", backgroundColor: appTheme.surface, borderBottomColor: appTheme.border, borderBottomWidth: 1, flexDirection: "row-reverse", justifyContent: "space-between", paddingBottom: 12, paddingHorizontal: 20, paddingTop: 16 }, sheetTitle: { color: appTheme.ink, fontSize: 18, fontWeight: "800" }, headerSpacer: { width: 58 }, sheetEmpty: { flex: 1, justifyContent: "center", padding: 20 }, pickerList: { gap: 12, padding: 20, paddingBottom: 36 }, pickerCard: { backgroundColor: appTheme.surface, borderColor: appTheme.border, borderRadius: 18, borderWidth: 1, overflow: "hidden" }, pickerCardSelected: { borderColor: "#818CF8", borderWidth: 2 }, pickerSubject: { alignItems: "center", flexDirection: "row-reverse", gap: 11, padding: 14 }, pickerColor: { borderRadius: 99, height: 12, width: 12 }, pickerText: { flex: 1 }, pickerSubjectTitle: { color: appTheme.ink, fontSize: 15, fontWeight: "800", textAlign: "right" }, pickerMeta: { color: appTheme.muted, fontSize: 11, marginTop: 3, textAlign: "right" }, pickAction: { color: appTheme.primary, fontSize: 12, fontWeight: "800" }, pickerSections: { borderTopColor: appTheme.border, borderTopWidth: 1, flexDirection: "row-reverse", gap: 8, padding: 10 }, pickerSection: { alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 10, flex: 1, padding: 9 }, pickerSectionActive: { backgroundColor: appTheme.primarySoft }, pickerSectionText: { color: appTheme.muted, fontSize: 12, fontWeight: "700" }, pickerSectionTextActive: { color: appTheme.primary }, pressed: { opacity: 0.75, transform: [{ scale: 0.985 }] },
 });
