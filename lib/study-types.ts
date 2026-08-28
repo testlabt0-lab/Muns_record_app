@@ -3,6 +3,7 @@ export type SubjectSection = "theory" | "practical";
 export type ProcessingStatus = "local" | "ready" | "processing" | "completed" | "failed";
 export type AttachmentKind = "image" | "pdf" | "document";
 export type TaskKind = "assignment" | "exam" | "review";
+export type TranscriptLanguage = "ar" | "en" | "mixed";
 
 export interface AcademicYear {
   id: string;
@@ -175,6 +176,9 @@ export interface Lecture {
   audioSizeBytes?: number;
   audioParts?: LectureAudioPart[];
   transcript?: string;
+  transcriptEditedText?: string;
+  transcriptEditedAt?: string;
+  transcriptionLanguage?: TranscriptLanguage;
   transcriptSegments?: TranscriptSegment[];
   transcribedAudioParts?: TranscribedAudioPart[];
   summary?: LectureSummary;

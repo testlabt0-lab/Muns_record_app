@@ -7,6 +7,7 @@ import { storagePut } from "../storage";
 import { transcribeAudio } from "./voiceTranscription";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
+import { getTranscriptionRequestOptions } from "../../shared/transcription-language";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 
@@ -71,13 +72,14 @@ async function startServer() {
         return;
       }
       const contentType = req.headers["content-type"] || "audio/m4a";
+      const { language, prompt } = getTranscriptionRequestOptions(req.get("x-muhadir-transcription-language"));
       const { url } = await storagePut(`lecture-audio/${Date.now()}.m4a`, req.body, contentType);
       const forwardedProtocol = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
       const baseUrl = `${forwardedProtocol || req.protocol}://${req.get("host")}`;
       const result = await transcribeAudio({
         audioUrl: `${baseUrl}${url}`,
-        language: "ar",
-        prompt: "هذه محاضرة جامعية باللغة العربية. اكتب النص بدقة، مع الحفاظ على المصطلحات العلمية.",
+        language,
+        prompt,
       });
       if (!("text" in result) || !result.text) {
         res.status(502).json({ error: "لم تُرجع خدمة التحويل نصاً صالحاً." });
