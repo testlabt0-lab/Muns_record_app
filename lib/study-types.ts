@@ -4,6 +4,7 @@ export type ProcessingStatus = "local" | "ready" | "processing" | "completed" | 
 export type AttachmentKind = "image" | "pdf" | "document";
 export type TaskKind = "assignment" | "exam" | "review";
 export type TranscriptLanguage = "ar" | "en" | "mixed";
+export type { SummaryStyle } from "../shared/summary-style";
 
 export interface AcademicYear {
   id: string;
@@ -182,6 +183,8 @@ export interface Lecture {
   transcriptSegments?: TranscriptSegment[];
   transcribedAudioParts?: TranscribedAudioPart[];
   summary?: LectureSummary;
+  summaryVersions?: LectureSummaryVersion[];
+  activeSummaryVersionId?: string;
   transcriptionStatus: ProcessingStatus;
   summaryStatus: ProcessingStatus;
   transcriptionProgress?: number;
@@ -195,6 +198,15 @@ export interface LectureSummary {
   keyPoints: string[];
   terms: string[];
   reviewQuestions: string[];
+}
+
+export interface LectureSummaryVersion {
+  id: string;
+  style: import("../shared/summary-style").SummaryStyle;
+  summary: LectureSummary;
+  source: "ai" | "edited";
+  createdAt: string;
+  editedAt?: string;
 }
 
 export interface ReviewCard {

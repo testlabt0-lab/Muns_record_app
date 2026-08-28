@@ -8,6 +8,7 @@ import { isAudioBackupEncryptionConfigured } from "./audio-backup-crypto";
 import { decryptAudioBackup, encryptAudioBackup } from "./audio-backup-crypto";
 import { storageGetSignedUrl, storagePut } from "./storage";
 import { MAX_ATTACHMENT_EXTRACTION_BYTES, isImageExtractionSupported } from "../lib/attachment-extraction";
+import { getSummaryStyleInstruction } from "../shared/summary-style";
 import { z } from "zod";
 
 const rawLectureSummarySchema = z.object({
@@ -52,7 +53,7 @@ export const appRouter = router({
   }),
   lectures: router({
     summarize: publicProcedure
-      .input(z.object({ transcript: z.string().min(40).max(60000), language: z.enum(["ar", "en"]).default("ar") }))
+      .input(z.object({ transcript: z.string().min(40).max(60000), language: z.enum(["ar", "en"]).default("ar"), style: z.enum(["quick", "exam", "outline"]).default("quick") }))
       .mutation(async ({ input }) => {
         const models = await listLLMModels();
         const model = models.data.find((candidate) => candidate.id === "gpt-5-mini")?.id;
@@ -61,10 +62,11 @@ export const appRouter = router({
           messages: [
             {
               role: "system",
-              content: "أنت مساعد أكاديمي دقيق. حلل نص محاضرة من دون اختراع معلومات. أعد JSON فقط بالمفاتيح overview وkeyPoints وterms وreviewQuestions. اكتب بالعربية الفصحى الواضحة، واجعل الأسئلة مناسبة للمراجعة الذاتية.",
+              content: `أنت مساعد أكاديمي دقيق. حلل نص محاضرة من دون اختراع معلومات. أعد JSON فقط بالمفاتيح overview وkeyPoints وterms وreviewQuestions. اكتب بالعربية الفصحى الواضحة، واجعل الأسئلة مناسبة للمراجعة الذاتية. ${getSummaryStyleInstruction(input.style)}`,
             },
             { role: "user", content: `لغة المحاضرة: ${input.language}\n\nنص المحاضرة:\n${input.transcript}` },
           ],
+          response_format: { type: "json_schema", json_schema: { name: "lecture_summary", strict: true, schema: { type: "object", properties: { overview: { type: "string" }, keyPoints: { type: "array", items: { type: "string" } }, terms: { type: "array", items: { type: "string" } }, reviewQuestions: { type: "array", items: { type: "string" } } }, required: ["overview", "keyPoints", "terms", "reviewQuestions"], additionalProperties: false } } },
         });
         const content = response.choices[0]?.message?.content;
         if (!content || typeof content !== "string") throw new Error("لم تُرجع خدمة التلخيص محتوى صالحاً.");

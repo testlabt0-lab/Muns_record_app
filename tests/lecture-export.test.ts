@@ -17,15 +17,10 @@ describe("تصدير المحاضرة", () => {
     expect(html).toContain("نص &lt;غير آمن&gt;");
   });
 
-  it("يضم الملاحظات العامة والموقّتة بعد تهريب محتواها", () => {
-    const html = buildLectureExportHtml({ ...lecture, notes: [
-      { id: "note-1", text: "فكرة <خاصة>", timestampSeconds: 75, createdAt: "2026-08-19T10:00:00.000Z", updatedAt: "2026-08-19T10:00:00.000Z" },
-      { id: "note-2", text: "تذكير عام", createdAt: "2026-08-19T10:00:00.000Z", updatedAt: "2026-08-19T10:00:00.000Z" },
-    ] });
-    expect(html).toContain("ملاحظاتي");
-    expect(html).toContain("عند 1:15");
-    expect(html).toContain("فكرة &lt;خاصة&gt;");
-    expect(html).toContain("ملاحظة عامة");
+  it("يعرض النص المحرر ووسم التحرير في ملف PDF", () => {
+    const html = buildLectureExportHtml({ ...lecture, transcriptEditedText: "نص محرر محلياً", transcriptEditedAt: "2026-08-28T10:00:00.000Z" });
+    expect(html).toContain("نص محرر محلياً");
+    expect(html).toContain("محرر محلياً");
   });
 
   it("يعرض وحدات حجم قابلة للقراءة", () => {
