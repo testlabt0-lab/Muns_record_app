@@ -155,6 +155,8 @@ export interface LectureNote {
   id: string;
   text: string;
   timestampSeconds?: number;
+  source?: "manual" | "audio" | "transcript" | "summary" | "attachment";
+  reviewCardCreatedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
